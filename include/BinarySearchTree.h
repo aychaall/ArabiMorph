@@ -19,8 +19,6 @@ public:
     Node* getRootNode(string value);
     void display();
  
-    bool loadRootsFromFile(const string& filename);    
-    vector<Root> getAllRoots();
     int getHeight();
     int getNodeCount();
     bool isEmpty();
@@ -28,4 +26,6 @@ public:
     void displayStructured();
     void displayRootWithDerivatives(string rootName);
 
+    bool loadRootsFromFile(const string& filename);    
+    vector<Root> getAllRoots();
 };
