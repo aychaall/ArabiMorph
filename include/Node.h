@@ -7,6 +7,7 @@ class Node {
    Root data;
    Node * left;
    Node * right;
+   int height;
 
 public:
  Node();
@@ -16,8 +17,10 @@ public:
 Root& getRootObject();
  void display();    
  Node* getLeft();
+ int getHeight();
     Node* getRight();
     void setLeft(Node* l);
     void setRight(Node* r);
     void setData(Root r);
+    void setheight(int x);
 };

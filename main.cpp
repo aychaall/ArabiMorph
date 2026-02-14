@@ -29,6 +29,7 @@ void displayMenu() {
     cout << "5. عرض مشتقات جذر (Display root derivatives)" << endl;
     cout << "6. تحميل جذور من ملف (Load roots from file)" << endl;
     cout << "7. معلومات الشجرة (Tree statistics)" << endl;
+     cout << "8.  حذف جذر(Delete a root)" << endl;
     cout << "0. خروج (Exit)" << endl;
     cout << "========================================" << endl;
     cout << "اختر خيار (Choose option): ";
@@ -80,7 +81,7 @@ int main() {
                 if(tree.isEmpty()) {
                     cout << "الشجرة فارغة (Tree is empty)" << endl;
                 } else {
-                    tree.displayStructured();
+                    tree.display();
                 }
                 break;
             }
@@ -125,6 +126,18 @@ int main() {
                 cout << "ارتفاع الشجرة (Tree height): "  << tree.getHeight() << endl;
                 cout << "الشجرة فارغة؟ (Is empty?): "
                      << (tree.isEmpty() ? "نعم (Yes)" : "لا (No)") << endl;
+                break;
+            }
+              case 8: {
+                cout << "\nأدخل الجذر (Enter root): ";
+                getline(cin, input);
+                if(!input.empty()) {
+                    Root newRoot(input);
+                    tree.deleteN(newRoot);
+                    cout << "✓ تم حذف الجذر بنجاح (Root deleted successfully)" << endl;
+                } else {
+                    cout << "✗ الجذر فارغ (Empty root)" << endl;
+                }
                 break;
             }
 

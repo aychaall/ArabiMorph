@@ -4,30 +4,119 @@
 using namespace std;
 
 BinarySearchTree::BinarySearchTree() : m_Root(nullptr) {}
+
 BinarySearchTree::~BinarySearchTree() {
     destroy(m_Root);
 }
+
 void BinarySearchTree::destroy(Node* node) {
     if(node == nullptr) return;
     destroy(node->getLeft());
     destroy(node->getRight());
     delete node;
+} 
+Node* BinarySearchTree::rotateRight(Node* y){
+Node* x=y->getLeft();
+Node *newleft=x->getRight();
+y->setLeft(newleft);
+x->setRight(y);
+y->setheight(1+max(getHeight(y->getLeft()),getHeight(y->getRight())));
+x->setheight(1+max(getHeight(x->getLeft()),getHeight(x->getRight())));
+return x;
 }
+Node* BinarySearchTree::rotateLeft(Node* y){
+Node* x=y->getRight();
+Node *newRight=x->getLeft();
+y->setRight(newRight);
+x->setLeft(y);
+y->setheight(1+max(getHeight(y->getLeft()),getHeight(y->getRight())));
+x->setheight(1+max(getHeight(x->getLeft()),getHeight(x->getRight())));
+return x;
+}
+
+int BinarySearchTree::getBalance(Node* y){
+    if(y == nullptr) return 0;
+    return getHeight(y->getLeft()) - getHeight(y->getRight());
+}
+
 
 Node* BinarySearchTree::insert(Node* node, Root r){
     if(node == nullptr) return new Node(r);
-
     if(r.getRoot() < node->getData())
         node->setLeft(insert(node->getLeft(), r));
     else if(r.getRoot() > node->getData())
         node->setRight(insert(node->getRight(), r));
-
+    else return node;
+    node->setheight(1+max(getHeight(node->getLeft()),getHeight(node->getRight())));
+    int balance=getBalance(node);
+  if (balance>1&&r.getRoot()<node->getLeft()->getData())
+        return rotateRight(node);
+    if (balance>1&& r.getRoot()>node->getLeft()->getData()) {
+        node->setLeft(rotateLeft(node->getLeft()));
+        return rotateRight(node);
+    }
+    if (balance<-1 &&r.getRoot()>node->getRight()->getData())
+        return rotateLeft(node);
+    if (balance<-1 &&r.getRoot()<node->getRight()->getData()) {  
+        node->setRight(rotateRight(node->getRight()));
+        return rotateLeft(node);
+    }
+return node;
+   
+}
+Node * BinarySearchTree::foundMin(Node* y){
+    while(y->getLeft()!=NULL)
+    y=y->getLeft();
+    return y;
+}
+Node* BinarySearchTree::deleteN(Node* node, Root r){
+   if(node == nullptr) return NULL;
+    if(r.getRoot() < node->getData())
+        node->setLeft(deleteN(node->getLeft(), r));
+    else if(r.getRoot() > node->getData())
+        node->setRight(deleteN(node->getRight(), r));
+    else {
+      if(node->getLeft() == NULL && node->getRight() == NULL){
+            delete node;
+            return NULL;
+        }
+        else if(node->getLeft() == NULL){
+            Node* temp = node->getRight();
+            delete node;
+            return temp;
+        }
+        else if(node->getRight() == NULL){
+            Node* temp = node->getLeft();
+            delete node;
+            return temp;
+        }
+      else{
+        Node* succ=foundMin(node->getRight());
+        node->setData(succ->getData());
+        node->setRight(deleteN(node->getRight(),succ->getData()));
+      }}
+  node->setheight(1+max(getHeight(node->getLeft()),getHeight(node->getRight())));
+    int balance=getBalance(node);
+  if(balance > 1 && getBalance(node->getLeft()) >= 0)
+        return rotateRight(node);
+    if(balance > 1 && getBalance(node->getLeft()) < 0){
+        node->setLeft(rotateLeft(node->getLeft()));
+    return rotateRight(node);
+    }
+    if(balance < -1 && getBalance(node->getRight()) <= 0)
+        return rotateLeft(node);
+    if(balance < -1 && getBalance(node->getRight()) > 0){
+        node->setRight(rotateRight(node->getRight()));
+        return rotateLeft(node);
+    }
+    
+   
     return node;
+
 }
 
 Node* BinarySearchTree::search(Node* node, string value){
     if(node == nullptr) return nullptr;
-
     if(node->getData() == value) return node;
     else if(value < node->getData()) return search(node->getLeft(), value);
     else return search(node->getRight(), value);
@@ -49,6 +138,9 @@ void BinarySearchTree::inorder(Node* node, vector<Root>& roots){
 void BinarySearchTree::insert(Root r){
     m_Root = insert(m_Root, r);
 }
+void BinarySearchTree::deleteN(Root r){
+    m_Root=deleteN(m_Root,r);
+}
 
 bool BinarySearchTree::search(string value){
     return search(m_Root, value) != nullptr;
@@ -63,84 +155,24 @@ void BinarySearchTree::display(){
     cout << endl;
 }
 
-// ─────────────────────────────────────────────
-//  Internal helpers
-// ─────────────────────────────────────────────
-
-// Draws a single node as a framed box:
-//   ╔══════════════╗
-//   ║  كتب         ║
-//   ╠══════════════╣  <- only if derivatives exist
-//   ║  ├─ كاتب x2  ║
-//   ║  └─ مكتبة x1 ║
-//   ╚══════════════╝
-static void drawNodeBox(const string& rootName,
-                        const vector<string>& derivs,
-                        const function<int(const string&)>& freq)
-{
-    // measure the widest line (ASCII width only — Arabic chars are wide)
-    size_t w = rootName.size() + 4;
-    for(auto& d : derivs){
-        size_t cand = d.size() + 10; // "  ├─  (xN)"
-        if(cand > w) w = cand;
-    }
-    if(w < 20) w = 20;
-
-    string bar(w, '=');
-    string thinBar(w, '-');
-
-    // top border
-    cout << "  \u2554" << bar << "\u2557" << endl;
-
-    // root name row
-    cout << "  \u2551  " << rootName
-         << string(w - rootName.size() - 2, ' ')
-         << "  \u2551" << endl;
-
-    if(!derivs.empty()){
-        // divider
-        cout << "  \u2560" << thinBar << "\u2563" << endl;
-
-        // each derivative
-        for(int i = 0; i < (int)derivs.size(); i++){
-            bool last = (i == (int)derivs.size() - 1);
-            string branch = last ? "  \u2514\u2500 " : "  \u251C\u2500 ";
-            string freqStr = " (x" + to_string(freq(derivs[i])) + ")";
-            string line = branch + derivs[i] + freqStr;
-            size_t pad = w - derivs[i].size() - freqStr.size() - 4;
-            cout << "  \u2551" << line << string(pad > w ? 0 : pad, ' ') << "\u2551" << endl;
-        }
-    }
-
-    // bottom border
-    cout << "  \u255A" << bar << "\u255D" << endl;
-}
-
-// Recursively prints the tree with branch lines
 void BinarySearchTree::printNodeBox(Node* node, const string& prefix, bool isLeft, bool isRight){
     if(node == nullptr) return;
 
-    Root& r    = node->getRootObject();
+    Root& r     = node->getRootObject();
     auto derivs = r.getDerivativesList();
-    auto freqFn = [&](const string& d){ return r.getFrequency(d); };
 
     bool hasLeft  = node->getLeft()  != nullptr;
     bool hasRight = node->getRight() != nullptr;
 
-    // branch line leading into this node
-    string branchLine = isLeft  ? "\u251C\u2500\u2500 [L] "   // ├── [L]
-                      : isRight ? "\u2514\u2500\u2500 [R] "   // └── [R]
+    string branchLine = isLeft  ? "├── [يسار] "
+                      : isRight ? "└── [يمين] "
                       :           "";
 
     cout << prefix << branchLine << endl;
 
-    // figure out the prefix for the node box and its children
-    string boxPrefix  = prefix + (isRight ? "    " : "\u2502   ");
-    string childPfx   = prefix + (isRight ? "    " : "\u2502   ");
+    string boxPrefix = prefix + (isRight ? "    " : "│   ");
+    string childPfx  = prefix + (isRight ? "    " : "│   ");
 
-    // print the node box
-    // reuse drawNodeBox but prepend the boxPrefix on each line
-    // We'll do it inline for simplicity
     size_t w = r.getRoot().size() + 4;
     for(auto& d : derivs){
         size_t cand = d.size() + 12;
@@ -149,90 +181,83 @@ void BinarySearchTree::printNodeBox(Node* node, const string& prefix, bool isLef
     if(w < 18) w = 18;
 
     string bar(w, '=');
-    string thinBar(w, '-');
+    string thin(w, '-');
 
-    cout << boxPrefix << "\u2554" << bar << "\u2557" << endl;
-    cout << boxPrefix << "\u2551  " << r.getRoot()
+    cout << boxPrefix << "╔" << bar << "╗" << endl;
+    cout << boxPrefix << "║  " << r.getRoot()
          << string(w > r.getRoot().size()+2 ? w - r.getRoot().size() - 2 : 0, ' ')
-         << "  \u2551" << endl;
+         << "  ║" << endl;
 
     if(!derivs.empty()){
-        cout << boxPrefix << "\u2560" << thinBar << "\u2563" << endl;
+        cout << boxPrefix << "╠" << thin << "╣" << endl;
         for(int i = 0; i < (int)derivs.size(); i++){
-            bool last = (i == (int)derivs.size() - 1);
-            string branch = last ? "  \u2514\u2500 " : "  \u251C\u2500 ";
-            string freqStr = " (x" + to_string(r.getFrequency(derivs[i])) + ")";
-            string content = branch + derivs[i] + freqStr;
-            int pad = (int)w - (int)derivs[i].size() - (int)freqStr.size() - 4;
-            cout << boxPrefix << "\u2551" << content
-                 << string(pad > 0 ? pad : 0, ' ') << "\u2551" << endl;
+            bool last    = (i == (int)derivs.size() - 1);
+            string br    = last ? "  └─ " : "  ├─ ";
+            string fq    = " (×" + to_string(r.getFrequency(derivs[i])) + ")";
+            string content = br + derivs[i] + fq;
+            int pad = (int)w - (int)derivs[i].size() - (int)fq.size() - 5;
+            cout << boxPrefix << "║" << content
+                 << string(pad > 0 ? pad : 0, ' ') << "║" << endl;
         }
     }
-    cout << boxPrefix << "\u255A" << bar << "\u255D" << endl;
+    cout << boxPrefix << "╚" << bar << "╝" << endl;
 
-    // recurse into children
     if(hasLeft)  printNodeBox(node->getLeft(),  childPfx, true,  false);
     if(hasRight) printNodeBox(node->getRight(), childPfx, false, true);
 }
 
-// ─────────────────────────────────────────────
-//  Public display functions
-// ─────────────────────────────────────────────
-
 void BinarySearchTree::displayStructured(){
     if(m_Root == nullptr){
-        cout << "\n  \u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557" << endl;
-        cout <<   "  \u2551   \u2205  Tree is empty               \u2551" << endl;
-        cout <<   "  \u255A\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255D\n" << endl;
+        cout << "\n  ╔══════════════════════════╗" << endl;
+        cout <<   "  ║   ∅  الشجرة فارغة        ║" << endl;
+        cout <<   "  ╚══════════════════════════╝\n" << endl;
         return;
     }
 
     int total  = getNodeCount();
     int height = getHeight();
 
-    // header banner
-    cout << "\n  \u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557" << endl;
-    cout <<   "  \u2551   Binary Search Tree                  \u2551" << endl;
-    cout <<   "  \u2551   Nodes: " << total
-         << "   |   Height: " << height
+    cout << "\n  ╔══════════════════════════════════╗" << endl;
+    cout <<   "  ║     شجرة البحث الثنائي           ║" << endl;
+    cout <<   "  ║  عدد العقد: " << total
+         << "   |   الارتفاع: " << height
          << string(20 - to_string(total).size() - to_string(height).size(), ' ')
-         << "\u2551" << endl;
-    cout <<   "  \u255A\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255D" << endl;
+         << "║" << endl;
+    cout <<   "  ╚══════════════════════════════════╝" << endl;
 
-    // root label
-    cout << "\n           [ROOT]" << endl;
-    cout <<   "             \u2502" << endl;
+    cout << "\n         [الجذر الرئيسي]" << endl;
+    cout <<   "               │" << endl;
 
-    // draw root node box
-    Root& r    = m_Root->getRootObject();
+    Root& r     = m_Root->getRootObject();
     auto derivs = r.getDerivativesList();
 
     size_t w = r.getRoot().size() + 4;
     for(auto& d : derivs){ size_t c = d.size()+12; if(c>w) w=c; }
     if(w < 18) w = 18;
-    string bar(w,'='), thin(w,'-');
 
-    cout << "  \u2554" << bar << "\u2557" << endl;
-    cout << "  \u2551  " << r.getRoot()
-         << string(w > r.getRoot().size()+2 ? w-r.getRoot().size()-2 : 0,' ')
-         << "  \u2551" << endl;
+    string bar(w, '=');
+    string thin(w, '-');
+
+    cout << "  ╔" << bar << "╗" << endl;
+    cout << "  ║  " << r.getRoot()
+         << string(w > r.getRoot().size()+2 ? w - r.getRoot().size() - 2 : 0, ' ')
+         << "  ║" << endl;
 
     if(!derivs.empty()){
-        cout << "  \u2560" << thin << "\u2563" << endl;
-        for(int i=0;i<(int)derivs.size();i++){
-            bool last = (i==(int)derivs.size()-1);
-            string br  = last ? "  \u2514\u2500 " : "  \u251C\u2500 ";
-            string fq  = " (x"+to_string(r.getFrequency(derivs[i]))+")";
+        cout << "  ╠" << thin << "╣" << endl;
+        for(int i = 0; i < (int)derivs.size(); i++){
+            bool last    = (i == (int)derivs.size()-1);
+            string br    = last ? "  └─ " : "  ├─ ";
+            string fq    = " (×" + to_string(r.getFrequency(derivs[i])) + ")";
             string content = br + derivs[i] + fq;
-            int pad = (int)w-(int)derivs[i].size()-(int)fq.size()-4;
-            cout << "  \u2551" << content << string(pad>0?pad:0,' ') << "\u2551" << endl;
+            int pad = (int)w - (int)derivs[i].size() - (int)fq.size() - 5;
+            cout << "  ║" << content << string(pad>0?pad:0,' ') << "║" << endl;
         }
     }
-    cout << "  \u255A" << bar << "\u255D" << endl;
+    cout << "  ╚" << bar << "╝" << endl;
 
-    // children
-    if(m_Root->getLeft())  printNodeBox(m_Root->getLeft(),  "\u2502   ", true,  false);
-    if(m_Root->getRight()) printNodeBox(m_Root->getRight(), "\u2502   ", false, true);
+    if(m_Root->getLeft())  printNodeBox(m_Root->getLeft(),  "│   ", true,  false);
+    if(m_Root->getRight()) printNodeBox(m_Root->getRight(), "│   ", false, true);
 
     cout << endl;
 }
@@ -241,54 +266,54 @@ void BinarySearchTree::displayRootWithDerivatives(string rootName){
     Node* node = getRootNode(rootName);
 
     if(node == nullptr){
-        cout << "\n  \u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557" << endl;
-        cout <<   "  \u2551  Not found: " << rootName
-             << string(14 > rootName.size() ? 14-rootName.size() : 0, ' ') << "  \u2551" << endl;
-        cout <<   "  \u255A\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255D\n" << endl;
+        cout << "\n  ╔══════════════════════════╗" << endl;
+        cout <<   "  ║  الجذر غير موجود: " << rootName
+             << string(6 > rootName.size() ? 6-rootName.size() : 0, ' ') << "  ║" << endl;
+        cout <<   "  ╚══════════════════════════╝\n" << endl;
         return;
     }
 
-    Root& r    = node->getRootObject();
+    Root& r     = node->getRootObject();
     auto derivs = r.getDerivativesList();
 
     size_t w = max(rootName.size(), (size_t)24);
-    for(auto& d : derivs){ size_t c=d.size()+12; if(c>w) w=c; }
-    string bar(w,'='), thin(w,'-');
+    for(auto& d : derivs){ size_t c = d.size()+12; if(c>w) w=c; }
 
-    cout << "\n  \u2554" << bar << "\u2557" << endl;
-    cout <<   "  \u2551  " << rootName
+    string bar(w, '=');
+    string thin(w, '-');
+
+    cout << "\n  ╔" << bar << "╗" << endl;
+    cout <<   "  ║  " << rootName
          << string(w > rootName.size()+2 ? w-rootName.size()-2 : 0,' ')
-         << "  \u2551" << endl;
-    cout <<   "  \u2560" << thin << "\u2563" << endl;
-    cout <<   "  \u2551  Derivatives: " << derivs.size()
-         << string(w > 16 ? w-16 : 0,' ') << "  \u2551" << endl;
-    cout <<   "  \u2560" << thin << "\u2563" << endl;
+         << "  ║" << endl;
+    cout <<   "  ╠" << thin << "╣" << endl;
+    cout <<   "  ║  عدد المشتقات: " << derivs.size()
+         << string(w > 18 ? w-18 : 0,' ') << "  ║" << endl;
+    cout <<   "  ╠" << thin << "╣" << endl;
 
     if(derivs.empty()){
-        cout << "  \u2551  -- No derivatives"
-             << string(w > 18 ? w-18 : 0, ' ') << "  \u2551" << endl;
+        cout << "  ║  -- لا توجد مشتقات"
+             << string(w > 20 ? w-20 : 0, ' ') << "  ║" << endl;
     } else {
-        for(int i=0;i<(int)derivs.size();i++){
-            bool last = (i==(int)derivs.size()-1);
-            string br  = last ? "  \u2514\u2500 " : "  \u251C\u2500 ";
-            string fq  = " (x"+to_string(r.getFrequency(derivs[i]))+")";
+        for(int i = 0; i < (int)derivs.size(); i++){
+            bool last    = (i == (int)derivs.size()-1);
+            string br    = last ? "  └─ " : "  ├─ ";
+            string fq    = " (×" + to_string(r.getFrequency(derivs[i])) + ")";
             string content = br + derivs[i] + fq;
-            int pad = (int)w-(int)derivs[i].size()-(int)fq.size()-4;
-            cout << "  \u2551" << content << string(pad>0?pad:0,' ') << "\u2551" << endl;
+            int pad = (int)w - (int)derivs[i].size() - (int)fq.size() - 5;
+            cout << "  ║" << content << string(pad>0?pad:0,' ') << "║" << endl;
         }
     }
-    cout << "  \u255A" << bar << "\u255D\n" << endl;
+    cout << "  ╚" << bar << "╝\n" << endl;
 }
 
 bool BinarySearchTree::loadRootsFromFile(const string& filename){
     ifstream file(filename);
     if(!file.is_open()) {
-        cerr << "خطأ في فتح الملف (Error opening file): " << filename << endl;
+        cerr << "خطأ في فتح الملف: " << filename << endl;
         return false;
     }
-    
-    file.imbue(locale("en_US.UTF-8"));
-    
+
     string line;
     int count = 0;
     while(getline(file, line)) {
@@ -298,12 +323,11 @@ bool BinarySearchTree::loadRootsFromFile(const string& filename){
             count++;
         }
     }
-    
+
     file.close();
-    cout << "تم تحميل " << count << " جذر (Loaded " << count << " roots)" << endl;
+    cout << "تم تحميل " << count << " جذر" << endl;
     return true;
 }
-
 
 vector<Root> BinarySearchTree::getAllRoots(){
     vector<Root> roots;
@@ -313,11 +337,7 @@ vector<Root> BinarySearchTree::getAllRoots(){
 
 int BinarySearchTree::getHeight(Node* node){
     if(node == nullptr) return 0;
-    
-    int leftHeight = getHeight(node->getLeft());
-    int rightHeight = getHeight(node->getRight());
-    
-    return 1 + max(leftHeight, rightHeight);
+    return node->getHeight(); 
 }
 
 int BinarySearchTree::getHeight(){

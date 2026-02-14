@@ -4,6 +4,7 @@ class BinarySearchTree{
 Node * m_Root;
 
     Node* insert(Node* node, Root r);
+    Node* deleteN(Node* node, Root r);
     Node* search(Node* node, string value);
     void inorder(Node* node);
     void inorder(Node* node,vector<Root>& roots); 
@@ -11,16 +12,20 @@ Node * m_Root;
     int getHeight(Node* node);
     int getNodeCount(Node* node);
     void printNodeBox(Node* node, const string& prefix, bool isLeft, bool isRight);
-
+    int getBalance(Node* y);
+    Node* foundMin(Node* Y);
 public:
      BinarySearchTree();
     ~BinarySearchTree();
     
+    Node* rotateRight(Node* y);
+    Node* rotateLeft(Node* y);
     void insert(Root r);
+    void deleteN(Root r);
     bool search(string value);
     Node* getRootNode(string value);
     void display();
- 
+
     int getHeight();
     int getNodeCount();
     bool isEmpty();
