@@ -1,13 +1,20 @@
+#ifdef _WIN32
+    #define WIN32_LEAN_AND_MEAN
+    #include <windows.h>
+#endif
+#include <clocale>
 #include "./include/BinarySearchTree.h"
 
 using namespace std;
- 
+
 void setupArabicConsole() {
-
-        system("chcp 65001 > nul");
-
-    locale::global(locale("en_US.UTF-8"));
-    cout.imbue(locale());
+#ifdef _WIN32
+    SetConsoleOutputCP(65001);
+    SetConsoleCP(65001);
+    setlocale(LC_ALL, ".UTF-8");
+#else
+    setlocale(LC_ALL, "en_US.UTF-8");
+#endif
 }
 
 void displayMenu() {
@@ -28,26 +35,24 @@ void displayMenu() {
 }
 
 int main() {
-    // Setup Arabic support
     setupArabicConsole();
-    
+
     BinarySearchTree tree;
     int choice;
     string input, rootName, derivative;
-    
+
     cout << "مرحبا بك في محرك البحث المورفولوجي العربي" << endl;
     cout << "Welcome to Arabic Morphological Search Engine" << endl;
-    
+
     do {
         displayMenu();
         cin >> choice;
-        cin.ignore(); 
-        
+        cin.ignore();
+
         switch(choice) {
             case 1: {
                 cout << "\nأدخل الجذر (Enter root): ";
                 getline(cin, input);
-                
                 if(!input.empty()) {
                     Root newRoot(input);
                     tree.insert(newRoot);
@@ -57,11 +62,10 @@ int main() {
                 }
                 break;
             }
-            
+
             case 2: {
                 cout << "\nأدخل الجذر للبحث (Enter root to search): ";
                 getline(cin, input);
-                
                 if(tree.search(input)) {
                     cout << "✓ الجذر موجود (Root found)" << endl;
                 } else {
@@ -69,7 +73,7 @@ int main() {
                 }
                 break;
             }
-            
+
             case 3: {
                 cout << "\nجميع الجذور (All roots):" << endl;
                 cout << "--------------------------------" << endl;
@@ -80,16 +84,14 @@ int main() {
                 }
                 break;
             }
-            
+
             case 4: {
                 cout << "\nأدخل الجذر (Enter root): ";
                 getline(cin, rootName);
-                
                 Node* node = tree.getRootNode(rootName);
                 if(node != nullptr) {
                     cout << "أدخل المشتق (Enter derivative): ";
                     getline(cin, derivative);
-                    
                     node->getRootObject().addderviation(derivative);
                     cout << "✓ تم إضافة المشتق بنجاح (Derivative added successfully)" << endl;
                 } else {
@@ -97,19 +99,17 @@ int main() {
                 }
                 break;
             }
-            
+
             case 5: {
                 cout << "\nأدخل الجذر (Enter root): ";
                 getline(cin, rootName);
-                
                 tree.displayRootWithDerivatives(rootName);
                 break;
             }
-            
+
             case 6: {
                 cout << "\nأدخل اسم الملف (Enter filename): ";
                 getline(cin, input);
-                
                 if(tree.loadRootsFromFile(input)) {
                     cout << "✓ تم تحميل الملف بنجاح (File loaded successfully)" << endl;
                 } else {
@@ -117,27 +117,26 @@ int main() {
                 }
                 break;
             }
-            
-        
+
             case 7: {
                 cout << "\nمعلومات الشجرة (Tree Statistics):" << endl;
                 cout << "--------------------------------" << endl;
                 cout << "عدد الجذور (Number of roots): " << tree.getNodeCount() << endl;
-                cout << "ارتفاع الشجرة (Tree height): " << tree.getHeight() << endl;
-                cout << "الشجرة فارغة؟ (Is empty?): " 
+                cout << "ارتفاع الشجرة (Tree height): "  << tree.getHeight() << endl;
+                cout << "الشجرة فارغة؟ (Is empty?): "
                      << (tree.isEmpty() ? "نعم (Yes)" : "لا (No)") << endl;
                 break;
             }
-            
+
             case 0:
                 cout << "\nشكراً لاستخدامك البرنامج (Thank you for using the program)" << endl;
                 break;
-                
+
             default:
                 cout << "\n✗ خيار غير صحيح (Invalid choice)" << endl;
         }
-        
+
     } while(choice != 0);
-    
+
     return 0;
 }
