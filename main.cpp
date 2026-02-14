@@ -1,8 +1,14 @@
 #include "./include/BinarySearchTree.h"
-#define WIN32_LEAN_AND_MEAN  
-#include <windows.h>
+
 using namespace std;
  
+void setupArabicConsole() {
+
+        system("chcp 65001 > nul");
+
+    locale::global(locale("en_US.UTF-8"));
+    cout.imbue(locale());
+}
 
 void displayMenu() {
     cout << "\n========================================" << endl;
@@ -22,12 +28,9 @@ void displayMenu() {
 }
 
 int main() {
-    #ifdef _WIN32
-    SetConsoleOutputCP(CP_UTF8);
-    SetConsoleCP(CP_UTF8);
-    setlocale(LC_ALL, ".UTF-8");
-#endif
-  
+    // Setup Arabic support
+    setupArabicConsole();
+    
     BinarySearchTree tree;
     int choice;
     string input, rootName, derivative;

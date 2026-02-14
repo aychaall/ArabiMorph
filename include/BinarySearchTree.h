@@ -10,6 +10,8 @@ Node * m_Root;
     void destroy(Node* node);
     int getHeight(Node* node);
     int getNodeCount(Node* node);
+    void printNodeBox(Node* node, const string& prefix, bool isLeft, bool isRight);
+
 public:
      BinarySearchTree();
     ~BinarySearchTree();
