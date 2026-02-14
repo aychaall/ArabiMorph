@@ -1,0 +1,20 @@
+# executables
+*.exe
+*.out
+
+# object files
+*.o
+*.obj
+
+# precompiled headers
+*.gch
+
+# build folders
+build/
+cmake-build-*/
+
+# vscode
+.vscode/
+
+# windows
+*.dll
