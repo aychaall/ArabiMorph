@@ -1,23 +1,30 @@
-using namespace std;
+#pragma once
 #include "./Node.h"
-class BinarySearchTree{
-Node * m_Root;
+#include <vector>
+#include <string>
+#include <fstream>
+#include <iostream>
+using namespace std;
+
+class BinarySearchTree {
+    Node* m_Root;
 
     Node* insert(Node* node, Root r);
     Node* deleteN(Node* node, Root r);
     Node* search(Node* node, string value);
     void inorder(Node* node);
-    void inorder(Node* node,vector<Root>& roots); 
+    void inorder(Node* node, vector<Root>& roots);
     void destroy(Node* node);
     int getHeight(Node* node);
     int getNodeCount(Node* node);
     void printNodeBox(Node* node, const string& prefix, bool isLeft, bool isRight);
     int getBalance(Node* y);
-    Node* foundMin(Node* Y);
+    Node* foundMin(Node* y);
+
 public:
-     BinarySearchTree();
+    BinarySearchTree();
     ~BinarySearchTree();
-    
+
     Node* rotateRight(Node* y);
     Node* rotateLeft(Node* y);
     void insert(Root r);
@@ -29,10 +36,13 @@ public:
     int getHeight();
     int getNodeCount();
     bool isEmpty();
-    
+
     void displayStructured();
     void displayRootWithDerivatives(string rootName);
 
-    bool loadRootsFromFile(const string& filename);    
+    bool loadRootsFromFile(const string& filename);
     vector<Root> getAllRoots();
+
+    // Expose root for GUI tree visualization
+    Node* getRoot() const { return m_Root; }
 };
