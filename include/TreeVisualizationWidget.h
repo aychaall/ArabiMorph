@@ -1,88 +1,55 @@
 #pragma once
 #include <QWidget>
-#include <QScrollArea>
-#include <QPainter>
-#include <QPainterPath>
-#include <QMouseEvent>
-#include <QWheelEvent>
-#include <QTimer>
-#include <QPropertyAnimation>
 #include <QMap>
-#include <QPointF>
-#include <QFont>
-#include <functional>
+#include <QPoint>
+#include <QString>
 #include "../include/BinarySearchTree.h"
 
-// Stores computed layout info per node
-struct NodeLayout {
-    QPointF center;
-    double x = 0, y = 0;
-    double targetX = 0, targetY = 0;
-    double animX = 0, animY = 0;
-    bool highlighted = false;
-    bool justAdded = false;
-    float pulse = 0.0f;
-};
-
-class TreeCanvas : public QWidget {
+class TreeVisualizationWidget : public QWidget {
     Q_OBJECT
-    Q_PROPERTY(float animProgress READ animProgress WRITE setAnimProgress)
-
 public:
-    explicit TreeCanvas(QWidget* parent = nullptr);
-
+    explicit TreeVisualizationWidget(QWidget* parent = nullptr);
     void setTree(BinarySearchTree* tree);
-    void setHighlightedNode(const QString& root);
-    void clearHighlight();
-    void animateInsert(const QString& root);
-    void animateDelete(const QString& root);
+    void refresh();
+    void selectNode(const QString& name) { m_selectedNode = name; update(); }
 
-    float animProgress() const { return m_animProgress; }
-    void  setAnimProgress(float v);
-
+    // Zoom controls (also callable from MainWindow zoom buttons)
     void zoomIn();
     void zoomOut();
-    void resetView();
+    void resetZoom();
+
+    QSize sizeHint() const override;
 
 signals:
     void nodeClicked(const QString& rootName);
 
 protected:
-    void paintEvent(QPaintEvent*) override;
+    void paintEvent(QPaintEvent*)     override;
     void mousePressEvent(QMouseEvent*) override;
-    void mouseMoveEvent(QMouseEvent*) override;
-    void mouseReleaseEvent(QMouseEvent*) override;
-    void wheelEvent(QWheelEvent*) override;
-    void resizeEvent(QResizeEvent*) override;
+    void mouseMoveEvent(QMouseEvent*)  override;
+    void wheelEvent(QWheelEvent*)      override;
 
 private:
-    void computeLayout();
-    void computeLayout(Node* node, double x, double y, double spread);
-    void drawEdges(QPainter& p, Node* node);
-    void drawNodes(QPainter& p, Node* node);
-    void drawNode(QPainter& p, Node* node, const NodeLayout& layout);
-    void drawEmptyState(QPainter& p);
+    BinarySearchTree* m_tree;
 
-    QString hitTest(const QPointF& pos);
-    QPointF nodeScreenPos(const QString& key);
+    // Zoom
+    double m_zoomFactor = 1.0;
 
-    BinarySearchTree* m_tree = nullptr;
-    QMap<QString, NodeLayout> m_layouts;
+    // Layout constants (unscaled)
+    const int m_nodeWidth  = 80;
+    const int m_nodeHeight = 40;
+    const int m_levelGap   = 90;
+    const int m_hPad       = 20;
 
-    // Pan/zoom
-    QPointF m_pan;
-    qreal   m_zoom = 1.0;
-    QPointF m_lastMouse;
-    bool    m_dragging = false;
+    // Runtime state
+    QMap<QString, QPoint> m_nodePositions;
+    QMap<QString, int>    m_depthMap;
+    QString               m_selectedNode;
+    QString               m_hoveredNode;
 
-    QString m_highlighted;
-    QString m_justAdded;
-    float   m_animProgress = 0.0f;
-
-    QTimer*             m_pulseTimer;
-    float               m_pulsePhase = 0.0f;
-
-    // layout constants
-    const double NODE_RADIUS = 36.0;
-    const double LEVEL_HEIGHT = 110.0;
+    // Helpers
+    int  treeWidth(Node* node, int spread) const;
+    int  treeHeight() const;
+    void computePositions(Node* node, int x, int y, int spread, int depth = 1);
+    void drawEdge(QPainter& p, QPoint from, QPoint to, bool isLeft);
 };

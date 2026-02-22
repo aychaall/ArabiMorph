@@ -1,78 +1,108 @@
 #pragma once
 #include <QMainWindow>
-#include <QWidget>
-#include <QVBoxLayout>
-#include <QHBoxLayout>
+#include <QTabWidget>
+#include <QTextEdit>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QLabel>
 #include <QListWidget>
-#include <QTextEdit>
-#include <QGroupBox>
 #include <QSplitter>
-#include <QStatusBar>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QGroupBox>
 #include <QScrollArea>
-#include <QToolButton>
+#include <QStatusBar>
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QTableWidget>
 #include <QFrame>
-#include <QToolButton>
-#include "../include/BinarySearchTree.h"
-#include "../include/TreeVisualizationWidget.h"
+#include <QSpinBox>
+#include <QFont>
+
+#include "BinarySearchTree.h"
+#include "hashtable.h"
+#include "core_engine.h"
+#include "TreeVisualizationWidget.h"
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
 public:
-    explicit MainWindow(QWidget* parent = nullptr);
+    MainWindow(QWidget* parent = nullptr);
     ~MainWindow();
 
 private slots:
-    void onInsertClicked();
-    void onSearchClicked();
-    void onDeleteClicked();
-    void onAddDerivativeClicked();
-    void onNodeSelected(const QString& rootName);
-    void onLoadFileClicked();
-    void refreshStats();
-    void refreshRootList();
-    void onRootListItemClicked(QListWidgetItem* item);
+    // Root / AVL
+    void onInsertRoot();
+    void onSearchRoot();
+    void onDeleteRoot();
+    void onLoadRootsFromFile();
+    void onDisplayAllRoots();
+    void onTreeNodeClicked(const QString& rootName);
+    void onShowDerivatives();
+
+    // Hash Table / Schemes
+    void onInsertScheme();
+    void onSearchScheme();
+    void onDeleteScheme();
+    void onUpdateScheme();
+    void onDisplayAllSchemes();
+    void onLoadSchemesFromFile();
+
+    // Engine
+    void onGenerateWord();
+    void onValidateWord();
+    void onMorphologicalFamily();
 
 private:
     void setupUI();
-    void setupStylesheet();
-    void showNodeDetails(const QString& rootName);
-    void updateTreeView();
-    QString buildDerivativesHtml(Node* node);
-    void showToast(const QString& msg, bool success = true);
+    void setupStyleSheet();
+    void setupRootTab();
+    void setupSchemeTab();
+    void setupEngineTab();
+    void setupAboutTab();
+
+    void log(const QString& msg, const QString& color = "#e2e8f0");
+    void logSuccess(const QString& msg);
+    void logError(const QString& msg);
+    void logInfo(const QString& msg);
+    void updateTreeStats();
+    void refreshTreeView();
+    void refreshSchemeTable();
 
     // Data
     BinarySearchTree* m_tree;
+    struct hashmap*   m_hashmap;
 
-    // Central
-    QSplitter*     m_splitter;
-    TreeCanvas*    m_treeCanvas;
+    // UI elements
+    QTabWidget*          m_tabs;
 
-    // Left panel
-    QWidget*       m_leftPanel;
-    QLineEdit*     m_rootInput;
-    QLineEdit*     m_searchInput;
-    QLineEdit*     m_derivativeInput;
-    QPushButton*   m_insertBtn;
-    QPushButton*   m_searchBtn;
-    QPushButton*   m_deleteBtn;
-    QPushButton*   m_addDerivBtn;
-    QPushButton*   m_loadFileBtn;
-    QToolButton*   m_zoomInBtn;
-    QToolButton*   m_zoomOutBtn;
-    QToolButton*   m_resetViewBtn;
-    QListWidget*   m_rootList;
+    // Root Tab
+    QLineEdit*           m_rootInput;
+    QTextEdit*           m_rootLog;
+    TreeVisualizationWidget* m_treeViz;
+    QScrollArea*         m_treeScroll;
+    QLabel*              m_statNodes;
+    QLabel*              m_statHeight;
+    QLabel*              m_statEmpty;
+    QListWidget*         m_derivativesList;
+    QLabel*              m_selectedRootLabel;
 
-    // Right panel: details
-    QWidget*       m_detailPanel;
-    QLabel*        m_detailTitle;
-    QTextEdit*     m_detailText;
-    QLabel*        m_statsLabel;
+    // Scheme Tab
+    QLineEdit*           m_schemeInput;
+    QLineEdit*           m_schemeOldInput;
+    QLineEdit*           m_schemeNewInput;
+    QTableWidget*        m_schemeTable;
+    QTextEdit*           m_schemeLog;
 
-    // Toast
-    QLabel*        m_toastLabel;
-    QTimer*        m_toastTimer;
+    // Engine Tab
+    QLineEdit*           m_engRootInput;
+    QLineEdit*           m_engSchemeInput;
+    QLineEdit*           m_engWordInput;
+    QLineEdit*           m_engValidRootInput;
+    QLineEdit*           m_engFamilySchemeInput;
+    QTextEdit*           m_engineLog;
+
+    // Status
+    QLabel*              m_statusLabel;
 };

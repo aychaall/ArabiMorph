@@ -1,775 +1,1151 @@
 #include "../include/MainWindow.h"
-#include <QFileDialog>
-#include <QMessageBox>
-#include <QTimer>
-#include <QPropertyAnimation>
-#include <QGraphicsOpacityEffect>
-#include <QScrollBar>
-#include <QFont>
-#include <QFontDatabase>
 #include <QApplication>
-#include <QScreen>
-#include <QPainter>
-#include <QSpacerItem>
+#include <QScrollBar>
+#include <QDateTime>
+#include <QTextStream>
+#include <QString>
+#include <QHeaderView>
+#include <QGridLayout>
+#include <QSizePolicy>
 
-// ─────────────────────────────────────────────────────────────────
-// Constructor
-// ─────────────────────────────────────────────────────────────────
-MainWindow::MainWindow(QWidget* parent)
-    : QMainWindow(parent), m_tree(new BinarySearchTree())
-{
-    setWindowTitle("ArabiMorph — Arabic Morphological Search Engine");
-    setMinimumSize(1280, 780);
+// ─────────────────────────────────────────────────────────────────────────────
+//  Constructor & UI Setup
+// ─────────────────────────────────────────────────────────────────────────────
 
-    // Center on screen
-    QScreen* screen = QApplication::primaryScreen();
-    if (screen) {
-        QRect sg = screen->availableGeometry();
-        resize(qMin(1600, sg.width() - 80), qMin(900, sg.height() - 80));
-        move(sg.center() - rect().center());
-    }
+MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
+    m_tree    = new BinarySearchTree();
+    m_hashmap = new struct hashmap();
+    set_hashmap(m_hashmap, 10000);
 
+    setupStyleSheet();
     setupUI();
-    setupStylesheet();
-
-    m_toastTimer = new QTimer(this);
-    m_toastTimer->setSingleShot(true);
-    connect(m_toastTimer, &QTimer::timeout, this, [this]() {
-        m_toastLabel->hide();
-    });
-
-    statusBar()->showMessage("جاهز — Ready");
-    refreshStats();
+    setWindowTitle("محرك الصرف العربي  |  Arabic Morphological Engine");
+    resize(1280, 800);
+    setMinimumSize(900, 600);
 }
 
-MainWindow::~MainWindow() { delete m_tree; }
-
-// ─────────────────────────────────────────────────────────────────
-// UI Setup
-// ─────────────────────────────────────────────────────────────────
-void MainWindow::setupUI() {
-    QWidget* central = new QWidget(this);
-    setCentralWidget(central);
-
-    QHBoxLayout* mainLayout = new QHBoxLayout(central);
-    mainLayout->setContentsMargins(0, 0, 0, 0);
-    mainLayout->setSpacing(0);
-
-    // ── Left sidebar ──────────────────────────────────────────
-    m_leftPanel = new QWidget();
-    m_leftPanel->setObjectName("leftPanel");
-    m_leftPanel->setFixedWidth(280);
-
-    QVBoxLayout* leftLayout = new QVBoxLayout(m_leftPanel);
-    leftLayout->setContentsMargins(16, 16, 16, 16);
-    leftLayout->setSpacing(12);
-
-    // Logo / title
-    QLabel* logoLabel = new QLabel("🌳 ArabiMorph");
-    logoLabel->setObjectName("logoLabel");
-    logoLabel->setAlignment(Qt::AlignCenter);
-    leftLayout->addWidget(logoLabel);
-
-    QLabel* subLabel = new QLabel("محرك البحث المورفولوجي العربي\nArabic Morphological BST");
-    subLabel->setObjectName("subLabel");
-    subLabel->setAlignment(Qt::AlignCenter);
-    leftLayout->addWidget(subLabel);
-
-    // Separator
-    QFrame* sep1 = new QFrame(); sep1->setFrameShape(QFrame::HLine);
-    sep1->setObjectName("separator");
-    leftLayout->addWidget(sep1);
-
-    // ── Insert group ─────────────────────────────────────────
-    QGroupBox* insertGroup = new QGroupBox("إضافة جذر — Insert Root");
-    insertGroup->setObjectName("sideGroup");
-    QVBoxLayout* ig = new QVBoxLayout(insertGroup);
-    ig->setSpacing(8);
-
-    m_rootInput = new QLineEdit();
-    m_rootInput->setObjectName("arabicInput");
-    m_rootInput->setPlaceholderText("أدخل الجذر ... (e.g. كتب)");
-    m_rootInput->setLayoutDirection(Qt::RightToLeft);
-
-    m_insertBtn = new QPushButton("＋ Insert");
-    m_insertBtn->setObjectName("primaryBtn");
-    m_insertBtn->setCursor(Qt::PointingHandCursor);
-
-    ig->addWidget(m_rootInput);
-    ig->addWidget(m_insertBtn);
-    leftLayout->addWidget(insertGroup);
-
-    // ── Search group ──────────────────────────────────────────
-    QGroupBox* searchGroup = new QGroupBox("بحث — Search");
-    searchGroup->setObjectName("sideGroup");
-    QVBoxLayout* sg_ = new QVBoxLayout(searchGroup);
-    sg_->setSpacing(8);
-
-    m_searchInput = new QLineEdit();
-    m_searchInput->setObjectName("arabicInput");
-    m_searchInput->setPlaceholderText("ابحث عن جذر ...");
-    m_searchInput->setLayoutDirection(Qt::RightToLeft);
-
-    m_searchBtn = new QPushButton("🔍 Search");
-    m_searchBtn->setObjectName("secondaryBtn");
-    m_searchBtn->setCursor(Qt::PointingHandCursor);
-
-    sg_->addWidget(m_searchInput);
-    sg_->addWidget(m_searchBtn);
-    leftLayout->addWidget(searchGroup);
-
-    // ── Delete group ──────────────────────────────────────────
-    QGroupBox* deleteGroup = new QGroupBox("حذف — Delete");
-    deleteGroup->setObjectName("sideGroup");
-    QVBoxLayout* dg = new QVBoxLayout(deleteGroup);
-    dg->setSpacing(8);
-
-    m_deleteBtn = new QPushButton("✕ Delete Selected");
-    m_deleteBtn->setObjectName("dangerBtn");
-    m_deleteBtn->setCursor(Qt::PointingHandCursor);
-
-    dg->addWidget(m_deleteBtn);
-    leftLayout->addWidget(deleteGroup);
-
-    // ── Derivative group ─────────────────────────────────────
-    QGroupBox* derivGroup = new QGroupBox("مشتقات — Derivatives");
-    derivGroup->setObjectName("sideGroup");
-    QVBoxLayout* dvg = new QVBoxLayout(derivGroup);
-    dvg->setSpacing(8);
-
-    m_derivativeInput = new QLineEdit();
-    m_derivativeInput->setObjectName("arabicInput");
-    m_derivativeInput->setPlaceholderText("المشتق ... (e.g. كاتب)");
-    m_derivativeInput->setLayoutDirection(Qt::RightToLeft);
-
-    m_addDerivBtn = new QPushButton("⊕ Add Derivative");
-    m_addDerivBtn->setObjectName("accentBtn");
-    m_addDerivBtn->setCursor(Qt::PointingHandCursor);
-
-    dvg->addWidget(m_derivativeInput);
-    dvg->addWidget(m_addDerivBtn);
-    leftLayout->addWidget(derivGroup);
-
-    // ── File load ─────────────────────────────────────────────
-    m_loadFileBtn = new QPushButton("📂 Load from File");
-    m_loadFileBtn->setObjectName("ghostBtn");
-    m_loadFileBtn->setCursor(Qt::PointingHandCursor);
-    leftLayout->addWidget(m_loadFileBtn);
-
-    QFrame* sep2 = new QFrame(); sep2->setFrameShape(QFrame::HLine);
-    sep2->setObjectName("separator");
-    leftLayout->addWidget(sep2);
-
-    // ── Root list ─────────────────────────────────────────────
-    QLabel* listLabel = new QLabel("الجذور — Roots");
-    listLabel->setObjectName("sectionLabel");
-    leftLayout->addWidget(listLabel);
-
-    m_rootList = new QListWidget();
-    m_rootList->setObjectName("rootList");
-    leftLayout->addWidget(m_rootList);
-
-    // ── Stats ─────────────────────────────────────────────────
-    m_statsLabel = new QLabel("Nodes: 0 | Height: 0");
-    m_statsLabel->setObjectName("statsLabel");
-    m_statsLabel->setAlignment(Qt::AlignCenter);
-    leftLayout->addWidget(m_statsLabel);
-
-    // ── Centre: tree canvas ───────────────────────────────────
-    QWidget* centerWidget = new QWidget();
-    centerWidget->setObjectName("centerWidget");
-    QVBoxLayout* cl = new QVBoxLayout(centerWidget);
-    cl->setContentsMargins(0, 0, 0, 0);
-    cl->setSpacing(0);
-
-    // Toolbar for zoom
-    QWidget* toolbar = new QWidget();
-    toolbar->setObjectName("toolbar");
-    toolbar->setFixedHeight(46);
-    QHBoxLayout* tbl = new QHBoxLayout(toolbar);
-    tbl->setContentsMargins(12, 4, 12, 4);
-    tbl->setSpacing(6);
-
-    QLabel* treeTitle = new QLabel("  AVL Tree Visualization");
-    treeTitle->setObjectName("toolbarTitle");
-    tbl->addWidget(treeTitle);
-    tbl->addStretch();
-
-    m_zoomOutBtn   = new QToolButton(); m_zoomOutBtn->setText("−");
-    m_zoomInBtn    = new QToolButton(); m_zoomInBtn->setText("+");
-    m_resetViewBtn = new QToolButton(); m_resetViewBtn->setText("⌂");
-    for (auto* b : {m_zoomOutBtn, m_zoomInBtn, m_resetViewBtn}) {
-        b->setObjectName("toolBtn");
-        b->setCursor(Qt::PointingHandCursor);
-        b->setFixedSize(30, 30);
-        tbl->addWidget(b);
-    }
-
-    cl->addWidget(toolbar);
-
-    m_treeCanvas = new TreeCanvas();
-    m_treeCanvas->setTree(m_tree);
-    cl->addWidget(m_treeCanvas, 1);
-
-    // Toast label (overlay)
-    m_toastLabel = new QLabel(centerWidget);
-    m_toastLabel->setObjectName("toastLabel");
-    m_toastLabel->setAlignment(Qt::AlignCenter);
-    m_toastLabel->setFixedHeight(40);
-    m_toastLabel->hide();
-
-    // ── Right: detail panel ───────────────────────────────────
-    m_detailPanel = new QWidget();
-    m_detailPanel->setObjectName("detailPanel");
-    m_detailPanel->setFixedWidth(260);
-    QVBoxLayout* rl = new QVBoxLayout(m_detailPanel);
-    rl->setContentsMargins(16, 16, 16, 16);
-    rl->setSpacing(10);
-
-    m_detailTitle = new QLabel("Node Details");
-    m_detailTitle->setObjectName("detailTitle");
-    m_detailTitle->setAlignment(Qt::AlignCenter);
-    rl->addWidget(m_detailTitle);
-
-    m_detailText = new QTextEdit();
-    m_detailText->setObjectName("detailText");
-    m_detailText->setReadOnly(true);
-    rl->addWidget(m_detailText, 1);
-
-    // Assemble main layout
-    mainLayout->addWidget(m_leftPanel);
-    mainLayout->addWidget(centerWidget, 1);
-    mainLayout->addWidget(m_detailPanel);
-
-    // ── Connections ───────────────────────────────────────────
-    connect(m_insertBtn,    &QPushButton::clicked, this, &MainWindow::onInsertClicked);
-    connect(m_searchBtn,    &QPushButton::clicked, this, &MainWindow::onSearchClicked);
-    connect(m_deleteBtn,    &QPushButton::clicked, this, &MainWindow::onDeleteClicked);
-    connect(m_addDerivBtn,  &QPushButton::clicked, this, &MainWindow::onAddDerivativeClicked);
-    connect(m_loadFileBtn,  &QPushButton::clicked, this, &MainWindow::onLoadFileClicked);
-    connect(m_zoomInBtn,    &QToolButton::clicked, m_treeCanvas, &TreeCanvas::zoomIn);
-    connect(m_zoomOutBtn,   &QToolButton::clicked, m_treeCanvas, &TreeCanvas::zoomOut);
-    connect(m_resetViewBtn, &QToolButton::clicked, m_treeCanvas, &TreeCanvas::resetView);
-    connect(m_treeCanvas,   &TreeCanvas::nodeClicked, this, &MainWindow::onNodeSelected);
-    connect(m_rootList,     &QListWidget::itemClicked, this, &MainWindow::onRootListItemClicked);
-
-    // Enter key shortcuts
-    connect(m_rootInput,  &QLineEdit::returnPressed, this, &MainWindow::onInsertClicked);
-    connect(m_searchInput,&QLineEdit::returnPressed, this, &MainWindow::onSearchClicked);
-
-    m_detailText->setHtml(
-        "<div style='color:#6080a0;text-align:center;margin-top:40px;font-family:Arial;'>"
-        "<p style='font-size:28px;'>🌿</p>"
-        "<p>Click a node in the tree<br>to see details here</p>"
-        "</div>"
-    );
+MainWindow::~MainWindow() {
+    delete m_tree;
+    delete m_hashmap;
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Stylesheet
-// ─────────────────────────────────────────────────────────────────
-void MainWindow::setupStylesheet() {
+void MainWindow::setupStyleSheet() {
     setStyleSheet(R"(
-QMainWindow {
-    background-color: #0a0c16;
-}
-QWidget {
-    font-family: "Segoe UI", "Arial", sans-serif;
-    color: #d0ddf0;
-}
-
-/* ── Left Panel ── */
-#leftPanel {
-    background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
-        stop:0 #0f1220, stop:1 #0a0c18);
-    border-right: 1px solid #1e2a45;
-}
-#logoLabel {
-    font-size: 22px;
-    font-weight: bold;
-    color: #7ab8f5;
-    padding: 8px 0;
-    letter-spacing: 1px;
-}
-#subLabel {
-    font-size: 10px;
-    color: #4a6080;
-    line-height: 1.5;
-}
-#separator {
-    color: #1e2a45;
-    background: #1e2a45;
-    max-height: 1px;
-    border: none;
-}
-#sectionLabel {
-    font-size: 11px;
-    color: #5a80aa;
-    font-weight: bold;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-}
-QGroupBox#sideGroup {
-    background: rgba(20, 30, 55, 0.6);
-    border: 1px solid #1e3060;
-    border-radius: 8px;
-    margin-top: 6px;
-    padding: 8px;
-    font-size: 11px;
-    color: #6080a8;
-    font-weight: bold;
-}
-QGroupBox#sideGroup::title {
-    subcontrol-origin: margin;
-    left: 10px;
-    padding: 0 4px;
-    color: #5090c0;
-}
-
-/* ── Inputs ── */
-#arabicInput {
-    background: #0d1525;
-    border: 1px solid #2a4070;
-    border-radius: 6px;
-    padding: 8px 12px;
-    font-size: 14px;
-    color: #e0eeff;
-    selection-background-color: #2060a0;
-}
-#arabicInput:focus {
-    border-color: #4090e0;
-    background: #101a2e;
-}
-#arabicInput::placeholder {
-    color: #304060;
-}
-
-/* ── Buttons ── */
-QPushButton, QToolButton {
-    border-radius: 6px;
-    padding: 8px 14px;
-    font-size: 12px;
-    font-weight: bold;
-    border: none;
-}
-#primaryBtn {
-    background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
-        stop:0 #3070d0, stop:1 #1a50b0);
-    color: white;
-}
-#primaryBtn:hover {
-    background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
-        stop:0 #4080e0, stop:1 #2060c0);
-}
-#primaryBtn:pressed { background: #1040a0; }
-
-#secondaryBtn {
-    background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
-        stop:0 #206060, stop:1 #104040);
-    color: #80e0c0;
-}
-#secondaryBtn:hover { background: #207060; }
-
-#dangerBtn {
-    background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
-        stop:0 #802020, stop:1 #501010);
-    color: #ffa0a0;
-}
-#dangerBtn:hover { background: #a02828; }
-
-#accentBtn {
-    background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
-        stop:0 #605010, stop:1 #402808);
-    color: #ffd080;
-}
-#accentBtn:hover { background: #706018; }
-
-#ghostBtn {
-    background: rgba(30, 50, 90, 0.5);
-    color: #6090b8;
-    border: 1px solid #2a3a60;
-}
-#ghostBtn:hover {
-    background: rgba(40, 70, 110, 0.7);
-    color: #80b0d0;
-}
-
-/* ── Root List ── */
-#rootList {
-    background: #080e1a;
-    border: 1px solid #1a2a45;
-    border-radius: 6px;
-    color: #a0c0e0;
-    font-size: 13px;
-    padding: 4px;
-}
-#rootList::item {
-    padding: 6px 10px;
-    border-radius: 4px;
-    margin: 1px 0;
-}
-#rootList::item:hover {
-    background: rgba(40, 80, 140, 0.5);
-    color: #c0e0ff;
-}
-#rootList::item:selected {
-    background: rgba(50, 100, 180, 0.7);
-    color: white;
-}
-
-#statsLabel {
-    font-size: 10px;
-    color: #3a5070;
-    padding: 4px;
-    border: 1px solid #1a2a40;
-    border-radius: 4px;
-    background: #080e1a;
-}
-
-/* ── Center ── */
-#centerWidget {
-    background: #0a0c16;
-}
-#toolbar {
-    background: #0d1220;
-    border-bottom: 1px solid #1a2540;
-}
-#toolbarTitle {
-    font-size: 13px;
-    font-weight: bold;
-    color: #5080b0;
-    letter-spacing: 1px;
-}
-#toolBtn {
-    background: rgba(30, 50, 90, 0.6);
-    color: #80b0e0;
-    border: 1px solid #2a3a60;
-    font-size: 16px;
-    font-weight: bold;
-    border-radius: 5px;
-}
-#toolBtn:hover {
-    background: rgba(50, 80, 130, 0.8);
-    color: #a0d0ff;
-}
-
-/* ── Right Panel ── */
-#detailPanel {
-    background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
-        stop:0 #0d1220, stop:1 #080d18);
-    border-left: 1px solid #1e2a45;
-}
-#detailTitle {
-    font-size: 14px;
-    font-weight: bold;
-    color: #6090c0;
-    padding: 8px 0;
-    border-bottom: 1px solid #1a2840;
-}
-#detailText {
-    background: transparent;
-    border: none;
-    color: #a0c0e0;
-    font-size: 12px;
-    line-height: 1.6;
-}
-#detailText QScrollBar:vertical {
-    background: #0a1020;
-    width: 6px;
-    border-radius: 3px;
-}
-#detailText QScrollBar::handle:vertical {
-    background: #2a4060;
-    border-radius: 3px;
-}
-
-/* ── Toast ── */
-#toastLabel {
-    background: rgba(20, 60, 120, 0.95);
-    color: #80d0ff;
-    border: 1px solid #3070c0;
-    border-radius: 20px;
-    font-size: 13px;
-    font-weight: bold;
-    padding: 0 20px;
-}
-
-/* ── ScrollBars ── */
-QScrollBar:vertical {
-    background: #080e1a;
-    width: 6px;
-    border-radius: 3px;
-    margin: 0;
-}
-QScrollBar::handle:vertical {
-    background: #2a4060;
-    border-radius: 3px;
-    min-height: 20px;
-}
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-
-/* ── Status bar ── */
-QStatusBar {
-    background: #0a0c16;
-    color: #3a5070;
-    font-size: 10px;
-    border-top: 1px solid #1a2030;
-}
+        QMainWindow {
+            background-color: #0d1117;
+        }
+        QTabWidget::pane {
+            border: 1px solid #21262d;
+            background: #0d1117;
+            border-radius: 8px;
+        }
+        QTabBar::tab {
+            background: #161b22;
+            color: #8b949e;
+            padding: 10px 22px;
+            border: 1px solid #21262d;
+            border-bottom: none;
+            border-radius: 6px 6px 0 0;
+            font-size: 13px;
+            font-family: 'Segoe UI', Arial;
+            margin-right: 3px;
+        }
+        QTabBar::tab:selected {
+            background: #1f2937;
+            color: #e6edf3;
+            border-color: #388bfd;
+            border-bottom: 2px solid #388bfd;
+        }
+        QTabBar::tab:hover:!selected {
+            background: #1c2128;
+            color: #c9d1d9;
+        }
+        QGroupBox {
+            border: 1px solid #21262d;
+            border-radius: 8px;
+            margin-top: 16px;
+            padding: 12px;
+            color: #8b949e;
+            font-size: 11px;
+            font-family: 'Segoe UI', Arial;
+            background: #0d1117;
+        }
+        QGroupBox::title {
+            subcontrol-origin: margin;
+            left: 12px;
+            padding: 0 6px;
+            color: #58a6ff;
+            font-weight: bold;
+            font-size: 11px;
+        }
+        QLineEdit {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: #e6edf3;
+            font-size: 14px;
+            font-family: 'Arial', sans-serif;
+            selection-background-color: #388bfd;
+        }
+        QLineEdit:focus {
+            border-color: #388bfd;
+            background: #1c2433;
+        }
+        QLineEdit::placeholder {
+            color: #484f58;
+        }
+        QPushButton {
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 8px 16px;
+            color: #c9d1d9;
+            font-size: 12px;
+            font-family: 'Segoe UI', Arial;
+            font-weight: 500;
+        }
+        QPushButton:hover {
+            background: #30363d;
+            border-color: #8b949e;
+            color: #e6edf3;
+        }
+        QPushButton:pressed {
+            background: #0d1117;
+        }
+        QPushButton#btnPrimary {
+            background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
+                stop:0 #1f6feb, stop:1 #1158c7);
+            border-color: #388bfd;
+            color: white;
+            font-weight: bold;
+        }
+        QPushButton#btnPrimary:hover {
+            background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
+                stop:0 #388bfd, stop:1 #1f6feb);
+        }
+        QPushButton#btnSuccess {
+            background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
+                stop:0 #238636, stop:1 #196127);
+            border-color: #2ea043;
+            color: white;
+            font-weight: bold;
+        }
+        QPushButton#btnSuccess:hover {
+            background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
+                stop:0 #2ea043, stop:1 #238636);
+        }
+        QPushButton#btnDanger {
+            background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
+                stop:0 #b91c1c, stop:1 #991b1b);
+            border-color: #ef4444;
+            color: white;
+            font-weight: bold;
+        }
+        QPushButton#btnDanger:hover {
+            background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
+                stop:0 #dc2626, stop:1 #b91c1c);
+        }
+        QPushButton#btnWarning {
+            background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
+                stop:0 #d97706, stop:1 #b45309);
+            border-color: #f59e0b;
+            color: white;
+            font-weight: bold;
+        }
+        QPushButton#btnWarning:hover {
+            background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
+                stop:0 #f59e0b, stop:1 #d97706);
+        }
+        QTextEdit {
+            background: #0d1117;
+            border: 1px solid #21262d;
+            border-radius: 6px;
+            padding: 8px;
+            color: #e6edf3;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            selection-background-color: #388bfd;
+        }
+        QListWidget {
+            background: #161b22;
+            border: 1px solid #21262d;
+            border-radius: 6px;
+            color: #e6edf3;
+            font-family: Arial;
+            font-size: 13px;
+        }
+        QListWidget::item {
+            padding: 6px 10px;
+            border-bottom: 1px solid #21262d;
+        }
+        QListWidget::item:selected {
+            background: #1f6feb;
+            color: white;
+        }
+        QListWidget::item:hover {
+            background: #1c2128;
+        }
+        QTableWidget {
+            background: #0d1117;
+            border: 1px solid #21262d;
+            border-radius: 6px;
+            color: #e6edf3;
+            gridline-color: #21262d;
+            font-size: 12px;
+            selection-background-color: #1f6feb;
+        }
+        QTableWidget::item {
+            padding: 6px;
+        }
+        QHeaderView::section {
+            background: #161b22;
+            color: #8b949e;
+            border: none;
+            border-bottom: 1px solid #30363d;
+            border-right: 1px solid #21262d;
+            padding: 8px;
+            font-weight: bold;
+            font-size: 11px;
+        }
+        QScrollBar:vertical {
+            background: #0d1117;
+            width: 8px;
+            border-radius: 4px;
+        }
+        QScrollBar::handle:vertical {
+            background: #30363d;
+            border-radius: 4px;
+            min-height: 20px;
+        }
+        QScrollBar::handle:vertical:hover { background: #484f58; }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+        QScrollBar:horizontal {
+            background: #0d1117;
+            height: 8px;
+        }
+        QScrollBar::handle:horizontal {
+            background: #30363d;
+            border-radius: 4px;
+        }
+        QLabel {
+            color: #8b949e;
+            font-family: 'Segoe UI', Arial;
+        }
+        QLabel#title {
+            color: #e6edf3;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        QLabel#stat {
+            color: #58a6ff;
+            font-size: 13px;
+            font-weight: bold;
+        }
+        QStatusBar {
+            background: #161b22;
+            color: #8b949e;
+            border-top: 1px solid #21262d;
+            font-size: 11px;
+        }
+        QSplitter::handle {
+            background: #21262d;
+            width: 2px;
+            height: 2px;
+        }
+        QScrollArea {
+            border: none;
+            background: transparent;
+        }
     )");
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Slots
-// ─────────────────────────────────────────────────────────────────
-void MainWindow::onInsertClicked() {
-    QString text = m_rootInput->text().trimmed();
-    if (text.isEmpty()) { showToast("⚠ الجذر فارغ — Empty root", false); return; }
+// ─────────────────────────────────────────────────────────────────────────────
+//  Main UI Layout
+// ─────────────────────────────────────────────────────────────────────────────
 
-    std::string s = text.toStdString();
-    if (m_tree->search(s)) {
-        showToast("⚠ الجذر موجود — Root already exists", false);
-        return;
+void MainWindow::setupUI() {
+    QWidget* central = new QWidget(this);
+    setCentralWidget(central);
+    QVBoxLayout* mainLayout = new QVBoxLayout(central);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
+    mainLayout->setSpacing(0);
+
+    // Header bar
+    QFrame* header = new QFrame();
+    header->setFixedHeight(56);
+    header->setStyleSheet("background: #161b22; border-bottom: 1px solid #21262d;");
+    QHBoxLayout* hdrLayout = new QHBoxLayout(header);
+    hdrLayout->setContentsMargins(20, 0, 20, 0);
+
+    QLabel* headerTitle = new QLabel("  محرك الصرف العربي  |  Arabic Morphological Engine");
+    headerTitle->setObjectName("title");
+    headerTitle->setStyleSheet("color: #e6edf3; font-size: 17px; font-weight: bold;");
+
+    QLabel* badge = new QLabel("AVL + HashTable");
+    badge->setStyleSheet(
+        "background: #1f3a5f; color: #58a6ff; border: 1px solid #388bfd;"
+        "border-radius: 10px; padding: 2px 10px; font-size: 11px; font-weight: bold;");
+
+    m_statusLabel = new QLabel("Ready");
+    m_statusLabel->setStyleSheet("color: #2ea043; font-size: 11px;");
+    m_statusLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+
+    hdrLayout->addWidget(headerTitle);
+    hdrLayout->addWidget(badge);
+    hdrLayout->addStretch();
+    hdrLayout->addWidget(m_statusLabel);
+    mainLayout->addWidget(header);
+
+    // Tabs
+    m_tabs = new QTabWidget();
+    m_tabs->setTabPosition(QTabWidget::North);
+    mainLayout->addWidget(m_tabs);
+
+    setupRootTab();
+    setupSchemeTab();
+    setupEngineTab();
+    setupAboutTab();
+
+    // Status bar
+    statusBar()->showMessage("Arabic Morphological Engine ready — AVL Tree + Hash Table");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Tab 1: Root Management (AVL Tree)
+// ─────────────────────────────────────────────────────────────────────────────
+
+void MainWindow::setupRootTab() {
+    QWidget* tab = new QWidget();
+    QHBoxLayout* mainLayout = new QHBoxLayout(tab);
+    mainLayout->setContentsMargins(12, 12, 12, 12);
+    mainLayout->setSpacing(12);
+
+    // ── Left panel: controls ──────────────────────────────────────────────────
+    QWidget* leftPanel = new QWidget();
+    leftPanel->setFixedWidth(280);
+    QVBoxLayout* leftLayout = new QVBoxLayout(leftPanel);
+    leftLayout->setSpacing(10);
+
+    // Input group
+    QGroupBox* inputGroup = new QGroupBox("Root Operations  (الجذور)");
+    QVBoxLayout* inputLayout = new QVBoxLayout(inputGroup);
+    inputLayout->setSpacing(8);
+
+    m_rootInput = new QLineEdit();
+    m_rootInput->setPlaceholderText("أدخل الجذر  |  Enter Arabic root...");
+    m_rootInput->setLayoutDirection(Qt::RightToLeft);
+    m_rootInput->setFont(QFont("Arial", 14));
+    m_rootInput->setMinimumHeight(40);
+    inputLayout->addWidget(m_rootInput);
+
+    auto* btnInsert = new QPushButton("⊕  Insert Root");
+    btnInsert->setObjectName("btnSuccess");
+    btnInsert->setMinimumHeight(36);
+    auto* btnSearch = new QPushButton("⌕  Search Root");
+    btnSearch->setObjectName("btnPrimary");
+    btnSearch->setMinimumHeight(36);
+    auto* btnDelete = new QPushButton("⊖  Delete Root");
+    btnDelete->setObjectName("btnDanger");
+    btnDelete->setMinimumHeight(36);
+    auto* btnDisplay = new QPushButton("≡  Display All (in-order)");
+    btnDisplay->setMinimumHeight(36);
+    auto* btnDerivs = new QPushButton("⊞  Show Derivatives");
+    btnDerivs->setMinimumHeight(36);
+    auto* btnLoadFile = new QPushButton("⊘  Load from File");
+    btnLoadFile->setMinimumHeight(36);
+
+    inputLayout->addWidget(btnInsert);
+    inputLayout->addWidget(btnSearch);
+    inputLayout->addWidget(btnDelete);
+    inputLayout->addWidget(btnDisplay);
+    inputLayout->addWidget(btnDerivs);
+    inputLayout->addWidget(btnLoadFile);
+    leftLayout->addWidget(inputGroup);
+
+    // Stats group
+    QGroupBox* statsGroup = new QGroupBox("Tree Statistics");
+    QGridLayout* statsGrid = new QGridLayout(statsGroup);
+    statsGrid->setSpacing(6);
+
+    statsGrid->addWidget(new QLabel("Nodes:"), 0, 0);
+    m_statNodes = new QLabel("0");
+    m_statNodes->setObjectName("stat");
+    statsGrid->addWidget(m_statNodes, 0, 1);
+
+    statsGrid->addWidget(new QLabel("Height:"), 1, 0);
+    m_statHeight = new QLabel("0");
+    m_statHeight->setObjectName("stat");
+    statsGrid->addWidget(m_statHeight, 1, 1);
+
+    statsGrid->addWidget(new QLabel("Empty:"), 2, 0);
+    m_statEmpty = new QLabel("Yes");
+    m_statEmpty->setObjectName("stat");
+    statsGrid->addWidget(m_statEmpty, 2, 1);
+
+    leftLayout->addWidget(statsGroup);
+
+    // Derivatives panel
+    QGroupBox* derivGroup = new QGroupBox("Node Derivatives  (المشتقات)");
+    QVBoxLayout* derivLayout = new QVBoxLayout(derivGroup);
+    m_selectedRootLabel = new QLabel("Click a node to inspect");
+    m_selectedRootLabel->setStyleSheet("color: #58a6ff; font-style: italic; font-size: 11px;");
+    derivLayout->addWidget(m_selectedRootLabel);
+    m_derivativesList = new QListWidget();
+    m_derivativesList->setMaximumHeight(160);
+    derivLayout->addWidget(m_derivativesList);
+    leftLayout->addWidget(derivGroup);
+
+    leftLayout->addStretch();
+
+    // ── Right panel: Log + Tree Visualizer ───────────────────────────────────
+    QWidget* rightPanel = new QWidget();
+    QVBoxLayout* rightLayout = new QVBoxLayout(rightPanel);
+    rightLayout->setSpacing(8);
+
+    // Tree visualizer
+    QGroupBox* vizGroup = new QGroupBox("AVL Tree Visualization");
+    QVBoxLayout* vizLayout = new QVBoxLayout(vizGroup);
+    vizLayout->setContentsMargins(4, 12, 4, 4);
+
+    m_treeScroll = new QScrollArea();
+    m_treeScroll->setWidgetResizable(true);
+    m_treeScroll->setMinimumHeight(350);
+    m_treeScroll->setStyleSheet("background: transparent; border: none;");
+
+    // Zoom toolbar
+    QHBoxLayout* zoomBar = new QHBoxLayout();
+    zoomBar->setSpacing(4);
+    auto* btnZoomIn  = new QPushButton("⊕ Zoom In");
+    auto* btnZoomOut = new QPushButton("⊖ Zoom Out");
+    auto* btnZoomRst = new QPushButton("↺ Reset Zoom");
+    btnZoomIn->setMaximumWidth(100);
+    btnZoomOut->setMaximumWidth(100);
+    btnZoomRst->setMaximumWidth(110);
+    btnZoomIn->setToolTip("Zoom in (also: scroll wheel)");
+    btnZoomOut->setToolTip("Zoom out (also: scroll wheel)");
+    btnZoomRst->setToolTip("Reset zoom to 100%");
+    zoomBar->addWidget(btnZoomIn);
+    zoomBar->addWidget(btnZoomOut);
+    zoomBar->addWidget(btnZoomRst);
+    zoomBar->addStretch();
+    vizLayout->addLayout(zoomBar);
+
+    m_treeViz = new TreeVisualizationWidget();
+    m_treeViz->setTree(m_tree);
+    m_treeScroll->setWidget(m_treeViz);
+    vizLayout->addWidget(m_treeScroll);
+
+    connect(btnZoomIn,  &QPushButton::clicked, m_treeViz, &TreeVisualizationWidget::zoomIn);
+    connect(btnZoomOut, &QPushButton::clicked, m_treeViz, &TreeVisualizationWidget::zoomOut);
+    connect(btnZoomRst, &QPushButton::clicked, m_treeViz, &TreeVisualizationWidget::resetZoom);
+    rightLayout->addWidget(vizGroup, 3);
+
+    // Log area
+    QGroupBox* logGroup = new QGroupBox("Operation Log");
+    QVBoxLayout* logLayout = new QVBoxLayout(logGroup);
+    m_rootLog = new QTextEdit();
+    m_rootLog->setReadOnly(true);
+    m_rootLog->setMaximumHeight(140);
+    logLayout->addWidget(m_rootLog);
+    rightLayout->addWidget(logGroup, 1);
+
+    mainLayout->addWidget(leftPanel);
+    mainLayout->addWidget(rightPanel, 1);
+
+    // Connect signals
+    connect(btnInsert,   &QPushButton::clicked, this, &MainWindow::onInsertRoot);
+    connect(btnSearch,   &QPushButton::clicked, this, &MainWindow::onSearchRoot);
+    connect(btnDelete,   &QPushButton::clicked, this, &MainWindow::onDeleteRoot);
+    connect(btnDisplay,  &QPushButton::clicked, this, &MainWindow::onDisplayAllRoots);
+    connect(btnDerivs,   &QPushButton::clicked, this, &MainWindow::onShowDerivatives);
+    connect(btnLoadFile, &QPushButton::clicked, this, &MainWindow::onLoadRootsFromFile);
+    connect(m_treeViz,   &TreeVisualizationWidget::nodeClicked,
+            this, &MainWindow::onTreeNodeClicked);
+    connect(m_rootInput, &QLineEdit::returnPressed, this, &MainWindow::onInsertRoot);
+
+    m_tabs->addTab(tab, "🌳  AVL Tree — Roots");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Tab 2: Scheme Management (Hash Table)
+// ─────────────────────────────────────────────────────────────────────────────
+
+void MainWindow::setupSchemeTab() {
+    QWidget* tab = new QWidget();
+    QHBoxLayout* mainLayout = new QHBoxLayout(tab);
+    mainLayout->setContentsMargins(12, 12, 12, 12);
+    mainLayout->setSpacing(12);
+
+    // Left controls
+    QWidget* leftPanel = new QWidget();
+    leftPanel->setFixedWidth(310);
+    QVBoxLayout* leftLayout = new QVBoxLayout(leftPanel);
+    leftLayout->setSpacing(10);
+
+    // Insert/Search/Delete group
+    QGroupBox* opsGroup = new QGroupBox("Scheme Operations  (الأوزان)");
+    QVBoxLayout* opsLayout = new QVBoxLayout(opsGroup);
+    opsLayout->setSpacing(8);
+
+    m_schemeInput = new QLineEdit();
+    m_schemeInput->setPlaceholderText("أدخل الوزن  |  Enter scheme (e.g. فاعل)...");
+    m_schemeInput->setLayoutDirection(Qt::RightToLeft);
+    m_schemeInput->setFont(QFont("Arial", 14));
+    m_schemeInput->setMinimumHeight(40);
+    opsLayout->addWidget(m_schemeInput);
+
+    auto* btnInsertS = new QPushButton("⊕  Insert Scheme");
+    btnInsertS->setObjectName("btnSuccess");
+    btnInsertS->setMinimumHeight(36);
+    auto* btnSearchS = new QPushButton("⌕  Search Scheme");
+    btnSearchS->setObjectName("btnPrimary");
+    btnSearchS->setMinimumHeight(36);
+    auto* btnDeleteS = new QPushButton("⊖  Delete Scheme");
+    btnDeleteS->setObjectName("btnDanger");
+    btnDeleteS->setMinimumHeight(36);
+    auto* btnDisplayS = new QPushButton("≡  Display All Schemes");
+    btnDisplayS->setMinimumHeight(36);
+    auto* btnLoadS = new QPushButton("⊘  Load from File");
+    btnLoadS->setMinimumHeight(36);
+
+    opsLayout->addWidget(btnInsertS);
+    opsLayout->addWidget(btnSearchS);
+    opsLayout->addWidget(btnDeleteS);
+    opsLayout->addWidget(btnDisplayS);
+    opsLayout->addWidget(btnLoadS);
+    leftLayout->addWidget(opsGroup);
+
+    // Update group
+    QGroupBox* updateGroup = new QGroupBox("Update Scheme");
+    QVBoxLayout* updateLayout = new QVBoxLayout(updateGroup);
+    updateLayout->setSpacing(8);
+
+    m_schemeOldInput = new QLineEdit();
+    m_schemeOldInput->setPlaceholderText("Old scheme name...");
+    m_schemeOldInput->setLayoutDirection(Qt::RightToLeft);
+    m_schemeOldInput->setFont(QFont("Arial", 13));
+    m_schemeNewInput = new QLineEdit();
+    m_schemeNewInput->setPlaceholderText("New scheme name...");
+    m_schemeNewInput->setLayoutDirection(Qt::RightToLeft);
+    m_schemeNewInput->setFont(QFont("Arial", 13));
+
+    auto* btnUpdate = new QPushButton("↺  Update Scheme");
+    btnUpdate->setObjectName("btnWarning");
+    btnUpdate->setMinimumHeight(36);
+
+    updateLayout->addWidget(m_schemeOldInput);
+    updateLayout->addWidget(m_schemeNewInput);
+    updateLayout->addWidget(btnUpdate);
+    leftLayout->addWidget(updateGroup);
+    leftLayout->addStretch();
+
+    // Right: table + log
+    QWidget* rightPanel = new QWidget();
+    QVBoxLayout* rightLayout = new QVBoxLayout(rightPanel);
+    rightLayout->setSpacing(8);
+
+    QGroupBox* tableGroup = new QGroupBox("Scheme Database  (قاعدة الأوزان)");
+    QVBoxLayout* tableLayout = new QVBoxLayout(tableGroup);
+    m_schemeTable = new QTableWidget(0, 3);
+    m_schemeTable->setHorizontalHeaderLabels({"Bucket", "Scheme  (الوزن)", "Algorithm  (الخوارزمية)"});
+    m_schemeTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    m_schemeTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
+    m_schemeTable->setColumnWidth(0, 60);
+    m_schemeTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_schemeTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    tableLayout->addWidget(m_schemeTable);
+    rightLayout->addWidget(tableGroup, 3);
+
+    QGroupBox* logGroup = new QGroupBox("Operation Log");
+    QVBoxLayout* logLayout = new QVBoxLayout(logGroup);
+    m_schemeLog = new QTextEdit();
+    m_schemeLog->setReadOnly(true);
+    m_schemeLog->setMaximumHeight(130);
+    logLayout->addWidget(m_schemeLog);
+    rightLayout->addWidget(logGroup, 1);
+
+    mainLayout->addWidget(leftPanel);
+    mainLayout->addWidget(rightPanel, 1);
+
+    connect(btnInsertS,  &QPushButton::clicked, this, &MainWindow::onInsertScheme);
+    connect(btnSearchS,  &QPushButton::clicked, this, &MainWindow::onSearchScheme);
+    connect(btnDeleteS,  &QPushButton::clicked, this, &MainWindow::onDeleteScheme);
+    connect(btnDisplayS, &QPushButton::clicked, this, &MainWindow::onDisplayAllSchemes);
+    connect(btnLoadS,    &QPushButton::clicked, this, &MainWindow::onLoadSchemesFromFile);
+    connect(btnUpdate,   &QPushButton::clicked, this, &MainWindow::onUpdateScheme);
+    connect(m_schemeInput, &QLineEdit::returnPressed, this, &MainWindow::onInsertScheme);
+
+    m_tabs->addTab(tab, "# Hash Table — Schemes");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Tab 3: Morphological Engine
+// ─────────────────────────────────────────────────────────────────────────────
+
+void MainWindow::setupEngineTab() {
+    QWidget* tab = new QWidget();
+    QVBoxLayout* mainLayout = new QVBoxLayout(tab);
+    mainLayout->setContentsMargins(12, 12, 12, 12);
+    mainLayout->setSpacing(12);
+
+    QHBoxLayout* topRow = new QHBoxLayout();
+    topRow->setSpacing(12);
+
+    // Generate word panel
+    QGroupBox* genGroup = new QGroupBox("Generate Word  (توليد الكلمة)");
+    QVBoxLayout* genLayout = new QVBoxLayout(genGroup);
+    genLayout->setSpacing(8);
+
+    QLabel* genDesc = new QLabel("Apply a morphological scheme to a root to generate a word.");
+    genDesc->setWordWrap(true);
+    genDesc->setStyleSheet("color: #6e7681; font-size: 11px; margin-bottom:4px;");
+    genLayout->addWidget(genDesc);
+
+    m_engRootInput = new QLineEdit();
+    m_engRootInput->setPlaceholderText("Root  (الجذر)  e.g. كتب");
+    m_engRootInput->setLayoutDirection(Qt::RightToLeft);
+    m_engRootInput->setFont(QFont("Arial", 14));
+    m_engRootInput->setMinimumHeight(40);
+
+    m_engSchemeInput = new QLineEdit();
+    m_engSchemeInput->setPlaceholderText("Scheme  (الوزن)  e.g. فاعل");
+    m_engSchemeInput->setLayoutDirection(Qt::RightToLeft);
+    m_engSchemeInput->setFont(QFont("Arial", 14));
+    m_engSchemeInput->setMinimumHeight(40);
+
+    auto* btnGenerate = new QPushButton("⚡  Generate Word");
+    btnGenerate->setObjectName("btnPrimary");
+    btnGenerate->setMinimumHeight(42);
+    btnGenerate->setFont(QFont("Segoe UI", 13, QFont::Bold));
+
+    genLayout->addWidget(new QLabel("Root  (الجذر):"));
+    genLayout->addWidget(m_engRootInput);
+    genLayout->addWidget(new QLabel("Scheme  (الوزن):"));
+    genLayout->addWidget(m_engSchemeInput);
+    genLayout->addWidget(btnGenerate);
+
+    // Validate word panel
+    QGroupBox* valGroup = new QGroupBox("Validate Word  (التحقق من الكلمة)");
+    QVBoxLayout* valLayout = new QVBoxLayout(valGroup);
+    valLayout->setSpacing(8);
+
+    QLabel* valDesc = new QLabel("Check whether a word morphologically belongs to a root.");
+    valDesc->setWordWrap(true);
+    valDesc->setStyleSheet("color: #6e7681; font-size: 11px; margin-bottom:4px;");
+    valLayout->addWidget(valDesc);
+
+    m_engWordInput = new QLineEdit();
+    m_engWordInput->setPlaceholderText("Word to validate  (الكلمة)");
+    m_engWordInput->setLayoutDirection(Qt::RightToLeft);
+    m_engWordInput->setFont(QFont("Arial", 14));
+    m_engWordInput->setMinimumHeight(40);
+
+    m_engValidRootInput = new QLineEdit();
+    m_engValidRootInput->setPlaceholderText("Against root  (الجذر)");
+    m_engValidRootInput->setLayoutDirection(Qt::RightToLeft);
+    m_engValidRootInput->setFont(QFont("Arial", 14));
+    m_engValidRootInput->setMinimumHeight(40);
+
+    auto* btnValidate = new QPushButton("✓  Validate Word");
+    btnValidate->setObjectName("btnSuccess");
+    btnValidate->setMinimumHeight(42);
+    btnValidate->setFont(QFont("Segoe UI", 13, QFont::Bold));
+
+    valLayout->addWidget(new QLabel("Word  (الكلمة):"));
+    valLayout->addWidget(m_engWordInput);
+    valLayout->addWidget(new QLabel("Root  (الجذر):"));
+    valLayout->addWidget(m_engValidRootInput);
+    valLayout->addWidget(btnValidate);
+
+    // Morphological family panel
+    QGroupBox* famGroup = new QGroupBox("Morphological Family  (العائلة الصرفية)");
+    QVBoxLayout* famLayout = new QVBoxLayout(famGroup);
+    famLayout->setSpacing(8);
+
+    QLabel* famDesc = new QLabel("Find all roots that have a validated derivative for the given scheme.");
+    famDesc->setWordWrap(true);
+    famDesc->setStyleSheet("color: #6e7681; font-size: 11px; margin-bottom:4px;");
+    famLayout->addWidget(famDesc);
+
+    m_engFamilySchemeInput = new QLineEdit();
+    m_engFamilySchemeInput->setPlaceholderText("Scheme  (الوزن)  e.g. فاعل");
+    m_engFamilySchemeInput->setLayoutDirection(Qt::RightToLeft);
+    m_engFamilySchemeInput->setFont(QFont("Arial", 14));
+    m_engFamilySchemeInput->setMinimumHeight(40);
+
+    auto* btnFamily = new QPushButton("🔍  Find Family");
+    btnFamily->setObjectName("btnWarning");
+    btnFamily->setMinimumHeight(42);
+    btnFamily->setFont(QFont("Segoe UI", 13, QFont::Bold));
+
+    famLayout->addWidget(new QLabel("Scheme  (الوزن):"));
+    famLayout->addWidget(m_engFamilySchemeInput);
+    famLayout->addStretch();
+    famLayout->addWidget(btnFamily);
+
+    topRow->addWidget(genGroup);
+    topRow->addWidget(valGroup);
+    topRow->addWidget(famGroup);
+    mainLayout->addLayout(topRow);
+
+    // Engine log
+    QGroupBox* logGroup = new QGroupBox("Engine Output  (المخرجات)");
+    QVBoxLayout* logLayout = new QVBoxLayout(logGroup);
+    m_engineLog = new QTextEdit();
+    m_engineLog->setReadOnly(true);
+    m_engineLog->setMinimumHeight(220);
+    logLayout->addWidget(m_engineLog);
+
+    auto* btnClearLog = new QPushButton("Clear Log");
+    btnClearLog->setMaximumWidth(100);
+    logLayout->addWidget(btnClearLog, 0, Qt::AlignRight);
+
+    mainLayout->addWidget(logGroup, 1);
+
+    connect(btnGenerate, &QPushButton::clicked, this, &MainWindow::onGenerateWord);
+    connect(btnValidate, &QPushButton::clicked, this, &MainWindow::onValidateWord);
+    connect(btnFamily,   &QPushButton::clicked, this, &MainWindow::onMorphologicalFamily);
+    connect(btnClearLog, &QPushButton::clicked, m_engineLog, &QTextEdit::clear);
+
+    m_tabs->addTab(tab, "⚡  Morphological Engine");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Tab 4: About
+// ─────────────────────────────────────────────────────────────────────────────
+
+void MainWindow::setupAboutTab() {
+    QWidget* tab = new QWidget();
+    QVBoxLayout* layout = new QVBoxLayout(tab);
+    layout->setContentsMargins(40, 40, 40, 40);
+    layout->setSpacing(20);
+
+    QLabel* title = new QLabel("محرك البحث المورفولوجي العربي\nArabic Morphological Search Engine");
+    title->setAlignment(Qt::AlignCenter);
+    title->setStyleSheet("color: #58a6ff; font-size: 22px; font-weight: bold; line-height: 1.5;");
+    layout->addWidget(title);
+
+    QLabel* separator = new QLabel();
+    separator->setFixedHeight(1);
+    separator->setStyleSheet("background: #21262d;");
+    layout->addWidget(separator);
+
+    QLabel* info = new QLabel(
+        "<div style='line-height:2; color:#c9d1d9; font-size:13px;'>"
+        "<b style='color:#58a6ff;'>Data Structures:</b><br>"
+        "&nbsp;&nbsp;• <b>AVL Tree</b> (BinarySearchTree) — stores and balances Arabic roots with O(log n) operations<br>"
+        "&nbsp;&nbsp;• <b>Hash Table</b> (hashmap) — stores morphological schemes with chaining collision resolution<br><br>"
+        "<b style='color:#58a6ff;'>Features:</b><br>"
+        "&nbsp;&nbsp;• Insert / Search / Delete Arabic roots (AVL auto-balancing)<br>"
+        "&nbsp;&nbsp;• Insert / Search / Delete / Update morphological schemes<br>"
+        "&nbsp;&nbsp;• Load roots or schemes from external text files<br>"
+        "&nbsp;&nbsp;• Generate words: apply a scheme's algorithm to a root<br>"
+        "&nbsp;&nbsp;• Validate words: check if a word belongs to a root<br>"
+        "&nbsp;&nbsp;• Morphological family: find all roots sharing a scheme<br>"
+        "&nbsp;&nbsp;• Interactive AVL tree visualization with click-to-inspect<br>"
+        "&nbsp;&nbsp;• Derivative tracking per root with frequency counts<br><br>"
+        "<b style='color:#58a6ff;'>Algorithm Detail:</b><br>"
+        "&nbsp;&nbsp;Schemes use tokens <code style='color:#79c0ff'>root[0]</code>, <code style='color:#79c0ff'>root[1]</code>, <code style='color:#79c0ff'>root[2]</code><br>"
+        "&nbsp;&nbsp;representing ف (fa), ع (ain), ل (lam) — the three root letters.<br>"
+        "&nbsp;&nbsp;The engine substitutes these with the actual root letters to form words."
+        "</div>"
+        );
+    info->setWordWrap(true);
+    info->setTextFormat(Qt::RichText);
+    layout->addWidget(info);
+    layout->addStretch();
+
+    m_tabs->addTab(tab, "ℹ  About");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Helper Methods
+// ─────────────────────────────────────────────────────────────────────────────
+
+void MainWindow::log(const QString& msg, const QString& color) {
+    // Determine which tab is active and log to appropriate widget
+    QTextEdit* logWidget = nullptr;
+    int idx = m_tabs->currentIndex();
+    if (idx == 0) logWidget = m_rootLog;
+    else if (idx == 1) logWidget = m_schemeLog;
+    else logWidget = m_engineLog;
+
+    if (!logWidget) return;
+    QString time = QDateTime::currentDateTime().toString("hh:mm:ss");
+    logWidget->append(QString("<span style='color:#484f58;'>[%1]</span> "
+                              "<span style='color:%2;'>%3</span>")
+                          .arg(time).arg(color).arg(msg));
+    logWidget->verticalScrollBar()->setValue(
+        logWidget->verticalScrollBar()->maximum());
+}
+
+void MainWindow::logSuccess(const QString& msg) { log("✓ " + msg, "#2ea043"); }
+void MainWindow::logError(const QString& msg)   { log("✗ " + msg, "#f85149"); }
+void MainWindow::logInfo(const QString& msg)    { log("ℹ " + msg, "#58a6ff"); }
+
+void MainWindow::updateTreeStats() {
+    m_statNodes->setText(QString::number(m_tree->getNodeCount()));
+    m_statHeight->setText(QString::number(m_tree->getHeight()));
+    m_statEmpty->setText(m_tree->isEmpty() ? "Yes" : "No");
+    m_statEmpty->setStyleSheet(m_tree->isEmpty()
+                                   ? "color: #f85149; font-size:13px; font-weight:bold;"
+                                   : "color: #2ea043; font-size:13px; font-weight:bold;");
+    m_statusLabel->setText(QString("Roots: %1  |  Height: %2")
+                               .arg(m_tree->getNodeCount())
+                               .arg(m_tree->getHeight()));
+}
+
+void MainWindow::refreshTreeView() {
+    m_treeViz->refresh();
+    updateTreeStats();
+}
+
+void MainWindow::refreshSchemeTable() {
+    m_schemeTable->setRowCount(0);
+    for (int i = 0; i < (int)m_hashmap->v.size(); i++) {
+        struct node* cur = m_hashmap->v[i];
+        while (cur) {
+            int row = m_schemeTable->rowCount();
+            m_schemeTable->insertRow(row);
+            auto* bucketItem = new QTableWidgetItem(QString::number(i));
+            bucketItem->setTextAlignment(Qt::AlignCenter);
+            bucketItem->setForeground(QColor(88, 166, 255));
+            m_schemeTable->setItem(row, 0, bucketItem);
+
+            auto* keyItem = new QTableWidgetItem(QString::fromStdString(cur->key));
+            keyItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+            keyItem->setFont(QFont("Arial", 13));
+            m_schemeTable->setItem(row, 1, keyItem);
+
+            auto* algoItem = new QTableWidgetItem(QString::fromStdString(cur->value.algo));
+            algoItem->setFont(QFont("Courier New", 11));
+            algoItem->setForeground(QColor(121, 192, 255));
+            m_schemeTable->setItem(row, 2, algoItem);
+
+            cur = cur->next;
+        }
     }
-    m_tree->insert(Root(s));
-    m_treeCanvas->animateInsert(text);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Root Tab Slots
+// ─────────────────────────────────────────────────────────────────────────────
+
+void MainWindow::onInsertRoot() {
+    QString input = m_rootInput->text().trimmed();
+    if (input.isEmpty()) { logError("Empty input — please enter a root."); return; }
+    m_tree->insert(Root(input.toStdString()));
+    logSuccess(QString("Root \"%1\" inserted into AVL tree.").arg(input));
     m_rootInput->clear();
-    refreshRootList();
-    refreshStats();
-    showToast("✓ تم إضافة الجذر — Root inserted: " + text, true);
-    statusBar()->showMessage("Inserted: " + text);
+    refreshTreeView();
+    m_treeViz->selectNode(input);
 }
 
-void MainWindow::onSearchClicked() {
-    QString text = m_searchInput->text().trimmed();
-    if (text.isEmpty()) return;
+void MainWindow::onSearchRoot() {
+    QString input = m_rootInput->text().trimmed();
+    if (input.isEmpty()) { logError("Enter a root to search."); return; }
+    bool found = m_tree->search(input.toStdString());
+    if (found) {
+        logSuccess(QString("Root \"%1\" found in AVL tree.").arg(input));
+        m_treeViz->selectNode(input);
+        onTreeNodeClicked(input);
+    }
+    else logError(QString("Root \"%1\" not found.").arg(input));
+}
 
-    std::string s = text.toStdString();
-    if (m_tree->search(s)) {
-        m_treeCanvas->setHighlightedNode(text);
-        showNodeDetails(text);
-        showToast("✓ الجذر موجود — Found: " + text, true);
-        // Highlight in list
-        for (int i = 0; i < m_rootList->count(); ++i) {
-            if (m_rootList->item(i)->text() == text) {
-                m_rootList->setCurrentRow(i);
-                break;
-            }
-        }
+void MainWindow::onDeleteRoot() {
+    QString input = m_rootInput->text().trimmed();
+    if (input.isEmpty()) { logError("Enter a root to delete."); return; }
+    if (!m_tree->search(input.toStdString())) {
+        logError(QString("Root \"%1\" not found — nothing to delete.").arg(input));
+        return;
+    }
+    m_tree->deleteN(Root(input.toStdString()));
+    logSuccess(QString("Root \"%1\" deleted from AVL tree.").arg(input));
+    m_rootInput->clear();
+    m_derivativesList->clear();
+    m_selectedRootLabel->setText("Click a node to inspect");
+    refreshTreeView();
+}
+
+void MainWindow::onDisplayAllRoots() {
+    if (m_tree->isEmpty()) { logInfo("Tree is empty."); return; }
+    vector<Root> roots = m_tree->getAllRoots();
+    logInfo(QString("All %1 root(s) in order:").arg(roots.size()));
+    QStringList parts;
+    for (auto& r : roots) parts << QString::fromStdString(r.getRoot());
+    log("  " + parts.join("  →  "), "#c9d1d9");
+}
+
+void MainWindow::onShowDerivatives() {
+    QString input = m_rootInput->text().trimmed();
+    if (input.isEmpty()) { logError("Enter a root to show its derivatives."); return; }
+    Node* nd = m_tree->getRootNode(input.toStdString());
+    if (!nd) { logError(QString("Root \"%1\" not found.").arg(input)); return; }
+    onTreeNodeClicked(input);
+}
+
+void MainWindow::onTreeNodeClicked(const QString& rootName) {
+    m_selectedRootLabel->setText(QString("Root: %1").arg(rootName));
+    m_derivativesList->clear();
+
+    Node* nd = m_tree->getRootNode(rootName.toStdString());
+    if (!nd) return;
+
+    auto derivs = nd->getRootObject().getDerivatives();
+    if (derivs.empty()) {
+        m_derivativesList->addItem("(No derivatives yet)");
+        logInfo(QString("Root \"%1\" has no derivatives yet.").arg(rootName));
     } else {
-        m_treeCanvas->clearHighlight();
-        showToast("✗ غير موجود — Not found: " + text, false);
-    }
-    statusBar()->showMessage("Search: " + text);
-}
-
-void MainWindow::onDeleteClicked() {
-    QListWidgetItem* item = m_rootList->currentItem();
-    if (!item) {
-        // Try from search field
-        QString text = m_searchInput->text().trimmed();
-        if (text.isEmpty()) { showToast("⚠ حدد جذراً — Select a root first", false); return; }
-        item = nullptr;
-        // find it
-        for (int i = 0; i < m_rootList->count(); ++i) {
-            if (m_rootList->item(i)->text() == text) {
-                item = m_rootList->item(i);
-                break;
-            }
+        for (auto& [word, freq] : derivs) {
+            auto* item = new QListWidgetItem(
+                QString("%1   (freq: %2)").arg(QString::fromStdString(word)).arg(freq));
+            item->setTextAlignment(Qt::AlignRight);
+            m_derivativesList->addItem(item);
         }
-        if (!item) { showToast("✗ الجذر غير موجود — Root not found", false); return; }
-    }
-
-    QString text = item->text();
-    m_tree->deleteN(Root(text.toStdString()));
-    m_treeCanvas->animateDelete(text);
-    refreshRootList();
-    refreshStats();
-    m_detailText->setHtml(
-        "<div style='color:#6080a0;text-align:center;margin-top:40px'>"
-        "<p style='font-size:22px;'>🗑</p><p>Node deleted</p></div>"
-    );
-    showToast("✓ تم الحذف — Deleted: " + text, true);
-    statusBar()->showMessage("Deleted: " + text);
-}
-
-void MainWindow::onAddDerivativeClicked() {
-    QListWidgetItem* item = m_rootList->currentItem();
-    QString deriv = m_derivativeInput->text().trimmed();
-
-    if (!item) { showToast("⚠ حدد جذراً — Select a root first", false); return; }
-    if (deriv.isEmpty()) { showToast("⚠ المشتق فارغ — Empty derivative", false); return; }
-
-    QString rootName = item->text();
-    Node* node = m_tree->getRootNode(rootName.toStdString());
-    if (node) {
-        node->getRootObject().addderviation(deriv.toStdString());
-        m_derivativeInput->clear();
-        showNodeDetails(rootName);
-        m_treeCanvas->update();
-        showToast("✓ تمت إضافة المشتق — Derivative added", true);
+        logInfo(QString("Root \"%1\" — %2 derivative(s):")
+                    .arg(rootName).arg(derivs.size()));
+        for (auto& [word, freq] : derivs)
+            log(QString("  • %1  (×%2)").arg(QString::fromStdString(word)).arg(freq),
+                "#79c0ff");
     }
 }
 
-void MainWindow::onLoadFileClicked() {
-    QString fname = QFileDialog::getOpenFileName(this,
-        "Load Roots File", "", "Text Files (*.txt);;All Files (*)");
-    if (fname.isEmpty()) return;
-
-    if (m_tree->loadRootsFromFile(fname.toStdString())) {
-        m_treeCanvas->setTree(m_tree);
-        refreshRootList();
-        refreshStats();
-        showToast("✓ تم تحميل الملف — File loaded", true);
-        statusBar()->showMessage("Loaded: " + fname);
+void MainWindow::onLoadRootsFromFile() {
+    QString fileName = QFileDialog::getOpenFileName(
+        this, "Load Roots from File", "", "Text Files (*.txt);;All Files (*)");
+    if (fileName.isEmpty()) return;
+    bool ok = m_tree->loadRootsFromFile(fileName.toStdString());
+    if (ok) {
+        logSuccess(QString("Roots loaded from \"%1\". Tree now has %2 root(s).")
+                       .arg(fileName).arg(m_tree->getNodeCount()));
+        refreshTreeView();
     } else {
-        showToast("✗ فشل التحميل — Failed to load file", false);
+        logError(QString("Could not open file \"%1\".").arg(fileName));
     }
 }
 
-void MainWindow::onNodeSelected(const QString& rootName) {
-    showNodeDetails(rootName);
-    // sync list selection
-    for (int i = 0; i < m_rootList->count(); ++i) {
-        if (m_rootList->item(i)->text() == rootName) {
-            m_rootList->setCurrentRow(i);
-            break;
+// ─────────────────────────────────────────────────────────────────────────────
+//  Scheme Tab Slots
+// ─────────────────────────────────────────────────────────────────────────────
+
+void MainWindow::onInsertScheme() {
+    QString input = m_schemeInput->text().trimmed();
+    if (input.isEmpty()) { logError("Empty input."); return; }
+    insert(m_hashmap, input.toStdString());
+    logSuccess(QString("Scheme \"%1\" inserted.").arg(input));
+    m_schemeInput->clear();
+    refreshSchemeTable();
+}
+
+void MainWindow::onSearchScheme() {
+    QString input = m_schemeInput->text().trimmed();
+    if (input.isEmpty()) { logError("Enter a scheme to search."); return; }
+    int pos = search(input.toStdString(), m_hashmap);
+    if (pos != -1)
+        logSuccess(QString("Scheme \"%1\" found in bucket %2.").arg(input).arg(pos));
+    else
+        logError(QString("Scheme \"%1\" not found.").arg(input));
+}
+
+void MainWindow::onDeleteScheme() {
+    QString input = m_schemeInput->text().trimmed();
+    if (input.isEmpty()) { logError("Enter a scheme to delete."); return; }
+    del(input.toStdString(), m_hashmap);
+    logSuccess(QString("Scheme \"%1\" deleted.").arg(input));
+    m_schemeInput->clear();
+    refreshSchemeTable();
+}
+
+void MainWindow::onDisplayAllSchemes() {
+    refreshSchemeTable();
+    logInfo(QString("%1 scheme(s) in hash table.").arg(m_schemeTable->rowCount()));
+}
+
+void MainWindow::onUpdateScheme() {
+    QString oldKey = m_schemeOldInput->text().trimmed();
+    QString newKey = m_schemeNewInput->text().trimmed();
+    if (oldKey.isEmpty() || newKey.isEmpty()) {
+        logError("Please fill both old and new scheme names.");
+        return;
+    }
+    ::update(oldKey.toStdString(), newKey.toStdString(), m_hashmap);
+    logSuccess(QString("Scheme updated: \"%1\" → \"%2\".").arg(oldKey).arg(newKey));
+    m_schemeOldInput->clear();
+    m_schemeNewInput->clear();
+    refreshSchemeTable();
+}
+
+void MainWindow::onLoadSchemesFromFile() {
+    QString fileName = QFileDialog::getOpenFileName(
+        this, "Load Schemes from File", "", "Text Files (*.txt);;All Files (*)");
+    if (fileName.isEmpty()) return;
+
+    QFile file(fileName);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        logError(QString("Could not open \"%1\".").arg(fileName));
+        return;
+    }
+    int count = 0;
+    QTextStream in(&file);
+    in.setEncoding(QStringConverter::Utf8);
+    while (!in.atEnd()) {
+        QString line = in.readLine().trimmed();
+        if (!line.isEmpty()) {
+            insert(m_hashmap, line.toStdString());
+            count++;
         }
     }
-    statusBar()->showMessage("Selected: " + rootName);
+    file.close();
+    logSuccess(QString("%1 scheme(s) loaded from \"%2\".").arg(count).arg(fileName));
+    refreshSchemeTable();
 }
 
-void MainWindow::onRootListItemClicked(QListWidgetItem* item) {
-    if (!item) return;
-    QString name = item->text();
-    m_treeCanvas->setHighlightedNode(name);
-    showNodeDetails(name);
-}
+// ─────────────────────────────────────────────────────────────────────────────
+//  Engine Tab Slots
+// ─────────────────────────────────────────────────────────────────────────────
 
-// ─────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────
-void MainWindow::refreshRootList() {
-    m_rootList->clear();
-    auto roots = m_tree->getAllRoots();
-    for (auto& r : roots) {
-        QListWidgetItem* it = new QListWidgetItem(
-            QString::fromStdString(r.getRoot()));
-        m_rootList->addItem(it);
-    }
-}
+void MainWindow::onGenerateWord() {
+    QString root   = m_engRootInput->text().trimmed();
+    QString scheme = m_engSchemeInput->text().trimmed();
 
-void MainWindow::refreshStats() {
-    int n = m_tree->getNodeCount();
-    int h = m_tree->getHeight();
-    m_statsLabel->setText(
-        QString("Nodes: <b>%1</b>   Height: <b>%2</b>").arg(n).arg(h));
-    m_statsLabel->setTextFormat(Qt::RichText);
-}
-
-void MainWindow::showNodeDetails(const QString& rootName) {
-    Node* node = m_tree->getRootNode(rootName.toStdString());
-    if (!node) {
-        m_detailTitle->setText("Not Found");
-        m_detailText->setHtml(
-            "<div style='color:#803030;text-align:center;margin-top:30px'>"
-            "<p>✗ Root not found</p></div>");
+    if (root.isEmpty() || scheme.isEmpty()) {
+        m_engineLog->append("<span style='color:#f85149;'>✗ Please enter both root and scheme.</span>");
         return;
     }
 
-    Root& r = node->getRootObject();
-    auto derivs = r.getDerivativesList();
-
-    m_detailTitle->setText("🌿 " + rootName);
-
-    QString html = "<div style='font-family:Arial; color:#a0c8e0; line-height:1.7;'>";
-
-    // Header box
-    html += QString(
-        "<div style='background:rgba(20,50,100,0.6); border:1px solid #2a5080; "
-        "border-radius:8px; padding:12px; margin-bottom:12px; text-align:center;'>"
-        "<span style='font-size:20px; color:#c0e8ff; font-weight:bold;'>%1</span><br>"
-        "<span style='font-size:11px; color:#4a7090;'>AVL Height: %2</span>"
-        "</div>"
-    ).arg(rootName).arg(node->getHeight());
-
-    // Stats row
-    html += "<div style='display:flex; gap:8px; margin-bottom:12px;'>";
-    html += QString(
-        "<div style='background:rgba(30,60,100,0.5); border-radius:6px; "
-        "padding:8px; text-align:center; flex:1; border:1px solid #1a3a60;'>"
-        "<div style='font-size:18px; color:#60c0ff; font-weight:bold;'>%1</div>"
-        "<div style='font-size:10px; color:#3a6080;'>Derivatives</div>"
-        "</div>"
-    ).arg(derivs.size());
-
-    QString leftStr  = node->getLeft()  ? QString::fromStdString(node->getLeft()->getData())  : "—";
-    QString rightStr = node->getRight() ? QString::fromStdString(node->getRight()->getData()) : "—";
-
-    html += QString(
-        "<div style='background:rgba(30,60,100,0.5); border-radius:6px; "
-        "padding:8px; text-align:center; flex:1; border:1px solid #1a3a60;'>"
-        "<div style='font-size:12px; color:#4090d0; font-weight:bold;'>%1</div>"
-        "<div style='font-size:10px; color:#3a6080;'>Left</div>"
-        "</div>"
-    ).arg(leftStr);
-
-    html += QString(
-        "<div style='background:rgba(30,60,100,0.5); border-radius:6px; "
-        "padding:8px; text-align:center; flex:1; border:1px solid #1a3a60;'>"
-        "<div style='font-size:12px; color:#4090d0; font-weight:bold;'>%1</div>"
-        "<div style='font-size:10px; color:#3a6080;'>Right</div>"
-        "</div>"
-    ).arg(rightStr);
-    html += "</div>";
-
-    // Derivatives list
-    if (derivs.empty()) {
-        html += "<div style='color:#3a6080; text-align:center; padding:16px;'>"
-                "لا توجد مشتقات<br><i>No derivatives yet</i></div>";
-    } else {
-        html += "<div style='font-size:11px; color:#3a6080; "
-                "text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;'>"
-                "Derivatives</div>";
-        for (auto& d : derivs) {
-            int freq = r.getFrequency(d);
-            html += QString(
-                "<div style='display:flex; background:rgba(20,40,70,0.6); "
-                "border-left:3px solid #3060a0; padding:6px 10px; "
-                "border-radius:0 4px 4px 0; margin:2px 0; "
-                "font-size:13px; direction:rtl;'>"
-                "<span style='color:#c0ddf0; flex:1;'>%1</span>"
-                "<span style='background:rgba(50,100,180,0.5); "
-                "color:#80b0e0; padding:1px 6px; border-radius:10px; "
-                "font-size:10px; margin-left:6px;'>×%2</span>"
-                "</div>"
-            ).arg(QString::fromStdString(d)).arg(freq);
-        }
+    // Find scheme algo in hashmap
+    int pos = search(scheme.toStdString(), m_hashmap);
+    if (pos == -1) {
+        m_engineLog->append(QString("<span style='color:#f85149;'>✗ Scheme \"%1\" not found in hash table.</span>").arg(scheme));
+        return;
     }
-    html += "</div>";
+    struct node* cur = m_hashmap->v[pos];
+    while (cur && cur->key != scheme.toStdString()) cur = cur->next;
+    if (!cur) {
+        m_engineLog->append("<span style='color:#f85149;'>✗ Scheme not found.</span>");
+        return;
+    }
 
-    m_detailText->setHtml(html);
+    string word = apply_root(cur->value.algo, root.toStdString());
+    QString qword = QString::fromStdString(word);
+
+    m_engineLog->append(QString(
+                            "<div style='margin:6px 0; padding:10px; background:#1a2744; border-left:3px solid #388bfd; border-radius:4px;'>"
+                            "<span style='color:#8b949e;'>Root:</span> <b style='color:#79c0ff; font-size:16px;'>%1</b>&nbsp;&nbsp;"
+                            "<span style='color:#8b949e;'>Scheme:</span> <b style='color:#79c0ff; font-size:16px;'>%2</b>&nbsp;&nbsp;"
+                            "<span style='color:#8b949e;'>→</span>&nbsp;&nbsp;"
+                            "<b style='color:#56d364; font-size:18px;'>%3</b>"
+                            "</div>").arg(root).arg(scheme).arg(qword));
+
+    // Store in AVL tree if root exists
+    Node* nd = m_tree->getRootNode(root.toStdString());
+    if (nd) {
+        nd->getRootObject().addderviation(word);
+        m_engineLog->append(QString("<span style='color:#2ea043;'>✓ \"%1\" stored as derivative of \"%2\" in AVL tree.</span>")
+                                .arg(qword).arg(root));
+        refreshTreeView();
+    } else {
+        m_engineLog->append(QString("<span style='color:#d29922;'>ℹ Root \"%1\" not in AVL tree. Insert it (Tab 1) to track derivatives.</span>")
+                                .arg(root));
+    }
 }
 
-void MainWindow::showToast(const QString& msg, bool success) {
-    m_toastLabel->setText(msg);
-    m_toastLabel->setStyleSheet(
-        success
-        ? "background:rgba(10,60,40,0.95); color:#60e0a0; "
-          "border:1px solid #20a060; border-radius:20px; font-size:12px; "
-          "font-weight:bold; padding:0 20px;"
-        : "background:rgba(60,10,10,0.95); color:#e08080; "
-          "border:1px solid #a02020; border-radius:20px; font-size:12px; "
-          "font-weight:bold; padding:0 20px;"
-    );
+void MainWindow::onValidateWord() {
+    QString word = m_engWordInput->text().trimmed();
+    QString root = m_engValidRootInput->text().trimmed();
 
-    // Position toast at bottom-center of tree canvas
-    int tw = qMin(500, m_treeCanvas->width() - 40);
-    int tx = m_treeCanvas->mapTo(centralWidget(), QPoint(0,0)).x()
-             + (m_treeCanvas->width() - tw) / 2;
-    int ty = m_treeCanvas->mapTo(centralWidget(), QPoint(0, m_treeCanvas->height()-60)).y();
-    m_toastLabel->setGeometry(tx, ty, tw, 40);
-    m_toastLabel->show();
-    m_toastLabel->raise();
+    if (word.isEmpty() || root.isEmpty()) {
+        m_engineLog->append("<span style='color:#f85149;'>✗ Please enter both word and root.</span>");
+        return;
+    }
 
-    m_toastTimer->start(2500);
+    // Inline validate: search all schemes for a match
+    string result = "NON";
+    for (int i = 0; i < (int)m_hashmap->v.size(); i++) {
+        struct node* cn = m_hashmap->v[i];
+        while (cn) {
+            string generated = apply_root(cn->value.algo, root.toStdString());
+            if (generated == word.toStdString()) {
+                result = "OUI|" + cn->key;
+                break;
+            }
+            cn = cn->next;
+        }
+        if (result != "NON") break;
+    }
+    QString qresult = QString::fromStdString(result);
+
+    if (qresult.startsWith("OUI|")) {
+        QString matchedScheme = qresult.mid(4);
+        m_engineLog->append(QString(
+                                "<div style='margin:6px 0; padding:10px; background:#0f2d1a; border-left:3px solid #2ea043; border-radius:4px;'>"
+                                "<b style='color:#56d364; font-size:16px;'>✓ OUI</b> — "
+                                "<span style='color:#c9d1d9;'>\"%1\" matches scheme <b style='color:#79c0ff;'>%2</b> with root <b style='color:#79c0ff;'>%3</b></span>"
+                                "</div>").arg(word).arg(matchedScheme).arg(root));
+
+        // Store in AVL tree
+        Node* nd = m_tree->getRootNode(root.toStdString());
+        if (nd) {
+            nd->getRootObject().addderviation(word.toStdString());
+            m_engineLog->append(QString("<span style='color:#2ea043;'>✓ \"%1\" stored as derivative of \"%2\".</span>")
+                                    .arg(word).arg(root));
+            refreshTreeView();
+        }
+    } else {
+        m_engineLog->append(QString(
+                                "<div style='margin:6px 0; padding:10px; background:#2d0f0f; border-left:3px solid #f85149; border-radius:4px;'>"
+                                "<b style='color:#f85149; font-size:16px;'>✗ NON</b> — "
+                                "<span style='color:#c9d1d9;'>\"%1\" does not match any scheme for root \"%2\".</span>"
+                                "</div>").arg(word).arg(root));
+    }
+}
+
+void MainWindow::onMorphologicalFamily() {
+    QString scheme = m_engFamilySchemeInput->text().trimmed();
+    if (scheme.isEmpty()) {
+        m_engineLog->append("<span style='color:#f85149;'>✗ Please enter a scheme.</span>");
+        return;
+    }
+
+    // Inline morphological family
+    vector<pair<string,string>> results;
+    {
+        int pos = search(scheme.toStdString(), m_hashmap);
+        if (pos != -1) {
+            struct node* sn = m_hashmap->v[pos];
+            while (sn && sn->key != scheme.toStdString()) sn = sn->next;
+            if (sn) {
+                string algo = sn->value.algo;
+                vector<Root> allRoots = m_tree->getAllRoots();
+                for (Root& r : allRoots) {
+                    string expectedWord = apply_root(algo, r.getRoot());
+                    auto derivs = r.getDerivatives();
+                    if (derivs.count(expectedWord))
+                        results.push_back({r.getRoot(), expectedWord});
+                }
+            }
+        }
+    }
+
+    m_engineLog->append(QString(
+                            "<div style='margin:6px 0; padding:8px; background:#1f1a00; border-left:3px solid #d29922; border-radius:4px;'>"
+                            "<b style='color:#f0c000; font-size:14px;'>Morphological Family — Scheme: %1</b>"
+                            "</div>").arg(scheme));
+
+    if (results.empty()) {
+        m_engineLog->append("<span style='color:#8b949e;'>  No validated derivatives found for this scheme.</span>");
+    } else {
+        m_engineLog->append(QString("<span style='color:#d29922;'>  %1 result(s):</span>").arg(results.size()));
+        for (auto& [root, word] : results) {
+            m_engineLog->append(QString(
+                                    "  <span style='color:#8b949e;'>Root</span> "
+                                    "<b style='color:#79c0ff;'>%1</b>"
+                                    " <span style='color:#484f58;'>→</span> "
+                                    "<b style='color:#56d364;'>%2</b>")
+                                    .arg(QString::fromStdString(root))
+                                    .arg(QString::fromStdString(word)));
+        }
+    }
 }

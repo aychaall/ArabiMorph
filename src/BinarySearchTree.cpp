@@ -118,7 +118,7 @@ void BinarySearchTree::inorder(Node* node) {
 void BinarySearchTree::inorder(Node* node, vector<Root>& roots) {
     if (!node) return;
     inorder(node->getLeft(), roots);
-    roots.push_back(Root(node->getData()));
+    roots.push_back(node->getRootObject()); 
     inorder(node->getRight(), roots);
 }
 
@@ -130,8 +130,17 @@ Node* BinarySearchTree::getRootNode(string value) { return search(m_Root, value)
 void BinarySearchTree::display() { inorder(m_Root); cout << endl; }
 
 void BinarySearchTree::printNodeBox(Node*, const string&, bool, bool) {}
-void BinarySearchTree::displayStructured() {}
-void BinarySearchTree::displayRootWithDerivatives(string) {}
+void BinarySearchTree::displayStructured() { inorder(m_Root); cout << endl; }
+
+void BinarySearchTree::displayRootWithDerivatives(string rootName) {
+    Node* node = search(m_Root, rootName);
+    if (!node) {
+        cout << "✗ الجذر غير موجود (Root not found): " << rootName << endl;
+        return;
+    }
+    cout << "\n=== الجذر (Root): " << node->getData() << " ===" << endl;
+    node->getRootObject().displayDerivatives();
+}
 
 bool BinarySearchTree::loadRootsFromFile(const string& filename) {
     ifstream file(filename);
