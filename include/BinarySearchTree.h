@@ -43,6 +43,6 @@ public:
     bool loadRootsFromFile(const string& filename);
     vector<Root> getAllRoots();
 
-    // Expose root for GUI tree visualization
+
     Node* getRoot() const { return m_Root; }
 };

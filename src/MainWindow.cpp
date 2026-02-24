@@ -1028,7 +1028,7 @@ void MainWindow::onGenerateWord() {
         return;
     }
 
-    string word = apply_root(cur->value.algo, root.toStdString());
+    string word = apply_algo(cur->value.algo, root.toStdString());
     QString qword = QString::fromStdString(word);
 
     m_engineLog->append(QString(
@@ -1039,7 +1039,7 @@ void MainWindow::onGenerateWord() {
                             "<b style='color:#56d364; font-size:18px;'>%3</b>"
                             "</div>").arg(root).arg(scheme).arg(qword));
 
-    // Store in AVL tree if root exists
+
     Node* nd = m_tree->getRootNode(root.toStdString());
     if (nd) {
         nd->getRootObject().addderviation(word);
@@ -1066,7 +1066,7 @@ void MainWindow::onValidateWord() {
     for (int i = 0; i < (int)m_hashmap->v.size(); i++) {
         struct node* cn = m_hashmap->v[i];
         while (cn) {
-            string generated = apply_root(cn->value.algo, root.toStdString());
+            string generated = apply_algo(cn->value.algo, root.toStdString());
             if (generated == word.toStdString()) {
                 result = "OUI|" + cn->key;
                 break;
@@ -1120,7 +1120,7 @@ void MainWindow::onMorphologicalFamily() {
                 string algo = sn->value.algo;
                 vector<Root> allRoots = m_tree->getAllRoots();
                 for (Root& r : allRoots) {
-                    string expectedWord = apply_root(algo, r.getRoot());
+                    string expectedWord = apply_algo(algo, r.getRoot());
                     auto derivs = r.getDerivatives();
                     if (derivs.count(expectedWord))
                         results.push_back({r.getRoot(), expectedWord});

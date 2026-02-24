@@ -13,7 +13,7 @@ public:
     void refresh();
     void selectNode(const QString& name) { m_selectedNode = name; update(); }
 
-    // Zoom controls (also callable from MainWindow zoom buttons)
+ 
     void zoomIn();
     void zoomOut();
     void resetZoom();

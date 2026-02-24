@@ -12,7 +12,11 @@
 # build folders
 build/
 cmake-build-*/
-
+release/
+debug/
+.qtcreator/
+Makefile.Debug
+Makefile.Release
 # vscode
 .vscode/
 

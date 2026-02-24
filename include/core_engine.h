@@ -8,7 +8,7 @@ void generate(string root, struct hashmap* hashmap_ptr, BinarySearchTree* tree);
 
 void validate(string word, string root, struct hashmap* hashmap_ptr, BinarySearchTree* tree);
 
-string apply_root(const string& algo, const string& root);
+string apply_algo(const string& algo, const string& root);
 void displayMorphologicalFamily(string scheme, struct hashmap* hashmap_ptr, BinarySearchTree* tree) ;
 
 #endif
